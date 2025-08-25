@@ -7,32 +7,35 @@ const router = express.Router();
 
 /**
  * @route POST /auth/login
- * @desc Validates phone number and simulates sending an OTP.
+ * @desc Validates phone number and simulates sending a dynamic OTP.
  */
 router.post('/login', async (req, res) => {
   const { countryCode, phoneNumber } = req.body;
 
-  // --- Added robust validation ---
   if (!phoneNumber || !countryCode) {
     return res.status(400).json({ message: 'Country code and phone number are required.' });
   }
 
-  // Regex to check if the phone number is exactly 10 digits
   if (!/^\d{10}$/.test(phoneNumber)) {
     return res.status(400).json({ message: 'Phone number must be exactly 10 digits.' });
   }
-  // --- End of validation ---
 
+  // --- FIX: Dynamic OTP Generation ---
+  // The OTP is now the last 4 digits of the phone number.
+  const dynamicOtp = phoneNumber.slice(-4);
   const fullPhoneNumber = `${countryCode}${phoneNumber}`;
-  const mockOtp = '1234';
-  console.log(`Simulating OTP for ${fullPhoneNumber}: ${mockOtp}`);
+
+  console.log(`Simulating OTP for ${fullPhoneNumber}: ${dynamicOtp}`);
   
-  res.status(200).json({ message: `OTP sent successfully. Use ${mockOtp} to verify.` });
+  // In the response, we'll tell the frontend what the OTP is for easy testing.
+  res.status(200).json({ 
+    message: `OTP sent successfully. For testing, use OTP: ${dynamicOtp}` 
+  });
 });
 
 /**
  * @route POST /auth/verify-otp
- * @desc Verifies OTP, creates a user if they don't exist, and returns a JWT.
+ * @desc Verifies OTP, creates/finds a user, and returns a JWT with a profile completion flag.
  */
 router.post('/verify-otp', async (req, res) => {
   const { countryCode, phoneNumber, otp } = req.body;
@@ -41,8 +44,9 @@ router.post('/verify-otp', async (req, res) => {
     return res.status(400).json({ message: 'Country code, phone number, and OTP are required.' });
   }
 
-  const mockOtp = '1234';
-  if (otp !== mockOtp) {
+  // --- FIX: Verify against the dynamic OTP ---
+  const expectedOtp = phoneNumber.slice(-4);
+  if (otp !== expectedOtp) {
     return res.status(401).json({ message: 'Invalid OTP.' });
   }
 
@@ -63,25 +67,32 @@ router.post('/verify-otp', async (req, res) => {
       console.log(`New user and wallet created for ${fullPhoneNumber}`);
     }
 
+    // --- FIX: Add the profile completion flag ---
+    // The profile is considered complete if the 'full_name' field is not null.
+    const isProfileComplete = user.full_name != null;
+
     const token = jwt.sign(
       { userId: user.id, role: user.role },
       process.env.JWT_SECRET,
       { expiresIn: '7d' }
     );
 
+    // The new response includes the 'isProfileComplete' flag.
     res.status(200).json({
       message: 'Login successful!',
       token,
+      isProfileComplete, // <-- CRITICAL NEW FIELD
       user: {
         id: user.id,
         phoneNumber: user.phone_number,
         role: user.role,
+        fullName: user.full_name, // Also return the name if it exists
       },
     });
 
   } catch (err) {
     console.error('Error in /verify-otp:', err);
-    res.status(500).json({ message: 'Internal server error. Please check database connection and query.' });
+    res.status(500).json({ message: 'Internal server error.' });
   }
 });
 
