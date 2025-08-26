@@ -6,6 +6,8 @@ const express = require('express');
 const db = require('./db');
 const authRoutes = require('./routes/auth');
 const profileRoutes = require('./routes/profile');
+const locationRoutes = require('./routes/locations'); 
+
 
 const app = express();
 app.use(express.json());
@@ -15,6 +17,8 @@ const PORT = process.env.USER_SERVICE_PORT || 3001;
 // API ROUTES
 app.use('/auth', authRoutes);
 app.use('/profile', profileRoutes);
+app.use('/locations', locationRoutes);
+
 
 // Health check route
 app.get('/', (req, res) => {

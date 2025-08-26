@@ -225,3 +225,15 @@ ALTER TABLE ONLY public.driver_actions ADD CONSTRAINT driver_actions_driver_id_f
 ALTER TABLE public.users ADD COLUMN date_of_birth DATE;
 
 ALTER TABLE public.users ADD COLUMN gender VARCHAR(50);
+
+-- =================================================================
+-- Add Saved Locations to Users Table
+-- =================================================================
+
+ALTER TABLE public.users 
+ADD COLUMN home_address TEXT,
+ADD COLUMN home_latitude NUMERIC(9,6),
+ADD COLUMN home_longitude NUMERIC(9,6),
+ADD COLUMN work_address TEXT,
+ADD COLUMN work_latitude NUMERIC(9,6),
+ADD COLUMN work_longitude NUMERIC(9,6);
