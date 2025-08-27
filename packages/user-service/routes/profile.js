@@ -1,17 +1,59 @@
 // packages/user-service/routes/profile.js
 const express = require('express');
 const db = require('../db');
-// --- FIX: Updated the import to use the new middleware name ---
 const tokenVerify = require('../middleware/token-verify'); 
 
 const router = express.Router();
+
+/**
+ * @route GET /profile
+ * @desc Gets the complete profile data for the authenticated user.
+ * @access Private (requires token)
+ */
+router.get('/', tokenVerify, async (req, res) => {
+  const userId = req.user.userId;
+
+  try {
+    const query = `
+      SELECT 
+        id, 
+        full_name, 
+        email, 
+        phone_number, 
+        role, 
+        date_of_birth, 
+        gender,
+        home_address,
+        home_latitude,
+        home_longitude,
+        work_address,
+        work_latitude,
+        work_longitude
+      FROM users 
+      WHERE id = $1
+    `;
+    const { rows } = await db.query(query, [userId]);
+
+    if (rows.length === 0) {
+      return res.status(404).json({ message: 'User not found.' });
+    }
+
+    res.status(200).json({
+      message: 'Profile data retrieved successfully!',
+      user: rows[0],
+    });
+  } catch (err) {
+    console.error('Error fetching profile:', err);
+    res.status(500).json({ message: 'Internal server error.' });
+  }
+});
+
 
 /**
  * @route PUT /profile/update
  * @desc Updates the profile details for the authenticated user.
  * @access Private (requires token)
  */
-// --- FIX: Using the correctly named middleware variable ---
 router.put('/update', tokenVerify, async (req, res) => {
   const { fullName, email, dob, gender } = req.body;
   const userId = req.user.userId;
