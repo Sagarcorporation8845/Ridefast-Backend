@@ -1,0 +1,53 @@
+# .github/workflows/deploy.yml
+
+# Name of the workflow
+name: Deploy to VPS
+
+# This action runs on every push to the 'main' branch
+on:
+  push:
+    branches:
+      - main
+
+# A job is a set of steps that execute on the same runner
+jobs:
+  deploy:
+    # The type of runner that the job will run on
+    runs-on: ubuntu-latest
+
+    # Steps represent a sequence of tasks that will be executed as part of the job
+    steps:
+      # Step 1: Log into the VPS via SSH and execute deployment steps
+      - name: SSH and Deploy
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+          script: |
+            # Navigate to the project directory defined in your secrets
+            cd ${{ secrets.PROJECT_PATH }}
+            
+            # Pull the latest changes from the main branch
+            echo "Pulling latest code from main branch..."
+            git pull origin main
+            
+            # Install root dependencies (like concurrently)
+            echo "Installing root dependencies..."
+            npm install
+            
+            # Install/update dependencies for the user-service
+            echo "Installing user-service dependencies..."
+            cd packages/user-service
+            npm install
+            
+            # Go back to the root project directory
+            cd ../..
+
+            # Reload the application using PM2 for a zero-downtime update
+            # This targets the process you started with --name "ridefast-backend"
+            echo "Reloading application..."
+            pm2 reload ridefast-backend
+            
+            echo "Deployment successful!"
+
