@@ -4,8 +4,7 @@
   "main": "index.js",
   "scripts": {
     "start:user-service": "nodemon packages/user-service/index.js",
-    
-
+    "start:driver-service": "nodemon packages/driver-service/index.js",
     "dev": "concurrently \"npm:start:*\""
   },
   "keywords": [],
