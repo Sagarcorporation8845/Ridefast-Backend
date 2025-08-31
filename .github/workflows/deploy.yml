@@ -40,9 +40,14 @@ jobs:
             echo "Installing user-service dependencies..."
             cd packages/user-service
             npm install
+           
+            # Install/update dependencies for the driver-service
+            echo "Installing driver-service dependencies..."
+            cd ../driver-service
+            npm install
             
             # Go back to the root project directory
-            cd ../..
+            cd ../../
 
             # Reload the application using PM2 for a zero-downtime update
             # This targets the process you started with --name "ridefast-backend"
