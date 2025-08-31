@@ -19,8 +19,7 @@ router.get('/', tokenVerify, async (req, res) => {
         id, 
         full_name, 
         email, 
-        phone_number, 
-        role, 
+        phone_number,
         date_of_birth, 
         gender,
         home_address,
@@ -70,7 +69,7 @@ router.put('/update', tokenVerify, async (req, res) => {
       UPDATE users 
       SET full_name = $1, email = $2, date_of_birth = $3, gender = $4 
       WHERE id = $5 
-      RETURNING id, full_name, email, phone_number, role, date_of_birth, gender
+      RETURNING id, full_name, email, phone_number, date_of_birth, gender
     `;
     const { rows } = await db.query(query, [fullName, email, dob, gender, userId]);
 

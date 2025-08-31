@@ -1,0 +1,21 @@
+{
+    "name": "driver-service",
+    "version": "1.0.0",
+    "description": "Service for managing driver onboarding and operations",
+    "main": "index.js",
+    "scripts": {
+      "start": "nodemon index.js"
+    },
+    "keywords": [],
+    "author": "",
+    "license": "ISC",
+    "dependencies": {
+      "dotenv": "^17.2.1",
+      "express": "^5.1.0",
+      "jsonwebtoken": "^9.0.2",
+      "multer": "^1.4.5-lts.1",
+      "pg": "^8.16.3"
+    }
+  }
+  
+  

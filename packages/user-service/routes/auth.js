@@ -20,14 +20,11 @@ router.post('/login', async (req, res) => {
     return res.status(400).json({ message: 'Phone number must be exactly 10 digits.' });
   }
 
-  // --- FIX: Dynamic OTP Generation ---
-  // The OTP is now the last 4 digits of the phone number.
   const dynamicOtp = phoneNumber.slice(-4);
   const fullPhoneNumber = `${countryCode}${phoneNumber}`;
 
   console.log(`Simulating OTP for ${fullPhoneNumber}: ${dynamicOtp}`);
   
-  // In the response, we'll tell the frontend what the OTP is for easy testing.
   res.status(200).json({ 
     message: `OTP sent successfully. For testing, use OTP: ${dynamicOtp}` 
   });
@@ -35,7 +32,7 @@ router.post('/login', async (req, res) => {
 
 /**
  * @route POST /auth/verify-otp
- * @desc Verifies OTP, creates/finds a user, and returns a JWT with a profile completion flag.
+ * @desc Verifies OTP, creates/finds a user, checks for a driver profile, and returns a JWT with a list of roles.
  */
 router.post('/verify-otp', async (req, res) => {
   const { countryCode, phoneNumber, otp } = req.body;
@@ -44,7 +41,6 @@ router.post('/verify-otp', async (req, res) => {
     return res.status(400).json({ message: 'Country code, phone number, and OTP are required.' });
   }
 
-  // --- FIX: Verify against the dynamic OTP ---
   const expectedOtp = phoneNumber.slice(-4);
   if (otp !== expectedOtp) {
     return res.status(401).json({ message: 'Invalid OTP.' });
@@ -53,40 +49,53 @@ router.post('/verify-otp', async (req, res) => {
   const fullPhoneNumber = `${countryCode}${phoneNumber}`;
 
   try {
+    // Find or create the user in the 'users' table
     let userResult = await db.query('SELECT * FROM users WHERE phone_number = $1', [fullPhoneNumber]);
     let user = userResult.rows[0];
 
     if (!user) {
+      // If the user does not exist, create a new one. By default, they are a customer.
       const newUserResult = await db.query(
-        'INSERT INTO users (phone_number, role) VALUES ($1, $2) RETURNING *',
-        [fullPhoneNumber, 'customer']
+        'INSERT INTO users (phone_number) VALUES ($1) RETURNING *',
+        [fullPhoneNumber]
       );
       user = newUserResult.rows[0];
       
+      // Also create a wallet for the new user
       await db.query('INSERT INTO wallets (user_id, balance) VALUES ($1, $2)', [user.id, 0.00]);
       console.log(`New user and wallet created for ${fullPhoneNumber}`);
     }
 
-    // --- FIX: Add the profile completion flag ---
-    // The profile is considered complete if the 'full_name' field is not null.
+    // Now, check if this user has a driver profile
+    const driverResult = await db.query('SELECT * FROM drivers WHERE user_id = $1', [user.id]);
+    const isDriver = driverResult.rows.length > 0;
+
+    // Determine the user's roles
+    const roles = ['customer'];
+    if (isDriver) {
+      roles.push('driver');
+    }
+
+    // A user's profile is considered complete if their full_name is not null
     const isProfileComplete = user.full_name != null;
 
+    // Create a JWT that includes the user's roles
     const token = jwt.sign(
-      { userId: user.id, role: user.role },
+      { userId: user.id, roles: roles }, // Include roles in the token payload
       process.env.JWT_SECRET,
       { expiresIn: '7d' }
     );
 
-    // The new response includes the 'isProfileComplete' flag.
+    // Return the token and user information, including the list of roles
     res.status(200).json({
       message: 'Login successful!',
       token,
-      isProfileComplete, // <-- CRITICAL NEW FIELD
+      isProfileComplete,
       user: {
         id: user.id,
         phoneNumber: user.phone_number,
-        role: user.role,
-        fullName: user.full_name, // Also return the name if it exists
+        fullName: user.full_name,
+        roles: roles, // The client app will use this to determine the user experience
       },
     });
 
