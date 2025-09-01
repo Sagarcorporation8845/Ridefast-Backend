@@ -8,7 +8,7 @@ const app = express();
 // --- Configuration ---
 // The gateway will run on port 3000 by default in development.
 // In production, your VPS/PM2 will manage the port (likely port 80).
-const PORT = process.env.PORT || 80; 
+const PORT = process.env.PORT || 3000; 
 
 // The internal URLs for your microservices. The gateway will forward requests to these.
 const USER_SERVICE_URL = 'http://localhost:3001';
