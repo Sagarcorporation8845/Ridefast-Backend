@@ -3,16 +3,23 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
+    "start": "node index.js",
     "start:user-service": "nodemon packages/user-service/index.js",
     "start:driver-service": "nodemon packages/driver-service/index.js",
-    "dev": "concurrently \"npm:start:*\""
+    "dev": "concurrently \"npm:start\" \"npm:start:user-service\" \"npm:start:driver-service\""
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "description": "",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "http-proxy-middleware": "^3.0.0"
+  },
   "devDependencies": {
     "concurrently": "^9.2.0",
     "nodemon": "^3.1.10"
   }
 }
+

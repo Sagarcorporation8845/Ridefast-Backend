@@ -50,9 +50,10 @@ jobs:
             cd ../../
 
             # Reload the application using PM2 for a zero-downtime update
-            # This targets the process you started with --name "ridefast-backend"
-            echo "Reloading application..."
-            pm2 reload ridefast-backend
+            # This single command tells PM2 to start or reload all apps
+            # defined in your ecosystem file with zero downtime.
+            echo "Starting or Reloading all services via PM2 ecosystem config..."
+            pm2 startOrGracefulReload ecosystem.config.js
             
             echo "Deployment successful!"
 
