@@ -27,16 +27,7 @@ jobs:
           script: |
             # Navigate to the project directory defined in your secrets
             cd ${{ secrets.PROJECT_PATH }}
-
-            echo "Showing changes since last pull..."
-            # Number of changed files
-            echo "Changed files:"
-            git diff --name-status HEAD..origin/main
-
-            # Summary of insertions/deletions
-            echo "Summary of changes:"
-            git diff --shortstat HEAD..origin/main
-
+            
             # Pull the latest changes from the main branch
             echo "Pulling latest code from main branch..."
             git pull origin main
@@ -56,7 +47,7 @@ jobs:
             npm install
             
             # Go back to the root project directory
-            cd ../../
+            cd ../..
 
             # Reload the application using PM2 for a zero-downtime update
             # This single command tells PM2 to start or reload all apps
