@@ -7,6 +7,7 @@ const cors = require('cors');
 const { connectDb } = require('./db');
 
 const onboardingRoutes = require('./routes/onboarding');
+const profileRoutes = require('./routes/profile'); 
 
 const app = express();
 
@@ -20,6 +21,7 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // --- API Routes ---
 app.use('/onboarding', onboardingRoutes);
+app.use('/profile', profileRoutes); 
 
 const PORT = process.env.DRIVER_SERVICE_PORT || 3002;
 
