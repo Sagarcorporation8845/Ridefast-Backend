@@ -6,7 +6,8 @@
     "start": "node index.js",
     "start:user-service": "nodemon packages/user-service/index.js",
     "start:driver-service": "nodemon packages/driver-service/index.js",
-    "dev": "concurrently \"npm:start\" \"npm:start:user-service\" \"npm:start:driver-service\""
+    "start:support-service": "nodemon packages/support-service/index.js",
+    "dev": "concurrently \"npm:start\" \"npm:start:user-service\" \"npm:start:driver-service\" \"npm:start:support-service\""
   },
   "keywords": [],
   "author": "",
@@ -22,4 +23,3 @@
     "nodemon": "^3.1.10"
   }
 }
-

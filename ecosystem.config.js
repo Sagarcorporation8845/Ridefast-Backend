@@ -11,6 +11,11 @@ module.exports = {
       name   : "driver-service",
       script : "./packages/driver-service/index.js",
       watch: false
+    },
+    {
+      name   : "support-service",
+      script : "./packages/support-service/index.js",
+      watch: false
     }]
   }
   

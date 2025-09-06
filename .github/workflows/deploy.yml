@@ -46,6 +46,11 @@ jobs:
             cd ../driver-service
             npm install
             
+            # Install/update dependencies for the support-service
+            echo "Installing support-service dependencies..."
+            cd ../support-service
+            npm install
+            
             # Go back to the root project directory
             cd ../..
 
