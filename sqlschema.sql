@@ -2,12 +2,12 @@
 -- PostgreSQL database dump
 --
 
-\restrict WPCW6mAE67xAUUrk3s94FM8HOUsIt7AYUznckeJi45Stgm8tIB7EAPDnxZ9KBtc
+\restrict n7etftg5NYxiuGh3KBkX0e1lN6yepn2JLGjbkMfeo6i8WYJsHlnOCTHnEP9te31
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.6
 
--- Started on 2025-09-02 10:41:47
+-- Started on 2025-09-13 20:48:13
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -30,7 +30,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA public;
 
 
 --
--- TOC entry 4561 (class 0 OID 0)
+-- TOC entry 4576 (class 0 OID 0)
 -- Dependencies: 2
 -- Name: EXTENSION "uuid-ossp"; Type: COMMENT; Schema: -; Owner: 
 --
@@ -158,6 +158,30 @@ CREATE TABLE public.drivers (
 ALTER TABLE public.drivers OWNER TO avnadmin;
 
 --
+-- TOC entry 229 (class 1259 OID 16724)
+-- Name: platform_staff; Type: TABLE; Schema: public; Owner: avnadmin
+--
+
+CREATE TABLE public.platform_staff (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    full_name character varying(255) NOT NULL,
+    email character varying(255) NOT NULL,
+    password_hash character varying(255) NOT NULL,
+    role character varying(50) NOT NULL,
+    city character varying(100),
+    status character varying(50) DEFAULT 'active'::character varying NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now(),
+    last_login timestamp with time zone,
+    created_by uuid,
+    CONSTRAINT platform_staff_role_check CHECK (((role)::text = ANY ((ARRAY['central_admin'::character varying, 'city_admin'::character varying, 'support_agent'::character varying, 'support'::character varying])::text[]))),
+    CONSTRAINT platform_staff_status_check CHECK (((status)::text = ANY ((ARRAY['active'::character varying, 'suspended'::character varying, 'inactive'::character varying])::text[])))
+);
+
+
+ALTER TABLE public.platform_staff OWNER TO avnadmin;
+
+--
 -- TOC entry 222 (class 1259 OID 16499)
 -- Name: rides; Type: TABLE; Schema: public; Owner: avnadmin
 --
@@ -259,7 +283,7 @@ CREATE TABLE public.wallets (
 ALTER TABLE public.wallets OWNER TO avnadmin;
 
 --
--- TOC entry 4396 (class 2606 OID 16568)
+-- TOC entry 4406 (class 2606 OID 16568)
 -- Name: driver_actions driver_actions_pkey; Type: CONSTRAINT; Schema: public; Owner: avnadmin
 --
 
@@ -268,7 +292,7 @@ ALTER TABLE ONLY public.driver_actions
 
 
 --
--- TOC entry 4374 (class 2606 OID 16552)
+-- TOC entry 4384 (class 2606 OID 16552)
 -- Name: driver_documents driver_documents_pkey; Type: CONSTRAINT; Schema: public; Owner: avnadmin
 --
 
@@ -277,7 +301,7 @@ ALTER TABLE ONLY public.driver_documents
 
 
 --
--- TOC entry 4390 (class 2606 OID 16562)
+-- TOC entry 4400 (class 2606 OID 16562)
 -- Name: driver_ledger driver_ledger_pkey; Type: CONSTRAINT; Schema: public; Owner: avnadmin
 --
 
@@ -286,7 +310,7 @@ ALTER TABLE ONLY public.driver_ledger
 
 
 --
--- TOC entry 4392 (class 2606 OID 16564)
+-- TOC entry 4402 (class 2606 OID 16564)
 -- Name: driver_payouts driver_payouts_pkey; Type: CONSTRAINT; Schema: public; Owner: avnadmin
 --
 
@@ -295,7 +319,7 @@ ALTER TABLE ONLY public.driver_payouts
 
 
 --
--- TOC entry 4376 (class 2606 OID 16576)
+-- TOC entry 4386 (class 2606 OID 16576)
 -- Name: driver_vehicles driver_vehicles_driver_id_key; Type: CONSTRAINT; Schema: public; Owner: avnadmin
 --
 
@@ -304,7 +328,7 @@ ALTER TABLE ONLY public.driver_vehicles
 
 
 --
--- TOC entry 4378 (class 2606 OID 16554)
+-- TOC entry 4388 (class 2606 OID 16554)
 -- Name: driver_vehicles driver_vehicles_pkey; Type: CONSTRAINT; Schema: public; Owner: avnadmin
 --
 
@@ -313,7 +337,7 @@ ALTER TABLE ONLY public.driver_vehicles
 
 
 --
--- TOC entry 4380 (class 2606 OID 16578)
+-- TOC entry 4390 (class 2606 OID 16578)
 -- Name: driver_vehicles driver_vehicles_registration_number_key; Type: CONSTRAINT; Schema: public; Owner: avnadmin
 --
 
@@ -322,7 +346,7 @@ ALTER TABLE ONLY public.driver_vehicles
 
 
 --
--- TOC entry 4370 (class 2606 OID 16550)
+-- TOC entry 4380 (class 2606 OID 16550)
 -- Name: drivers drivers_pkey; Type: CONSTRAINT; Schema: public; Owner: avnadmin
 --
 
@@ -331,7 +355,7 @@ ALTER TABLE ONLY public.drivers
 
 
 --
--- TOC entry 4372 (class 2606 OID 16574)
+-- TOC entry 4382 (class 2606 OID 16574)
 -- Name: drivers drivers_user_id_key; Type: CONSTRAINT; Schema: public; Owner: avnadmin
 --
 
@@ -340,7 +364,25 @@ ALTER TABLE ONLY public.drivers
 
 
 --
--- TOC entry 4382 (class 2606 OID 16556)
+-- TOC entry 4408 (class 2606 OID 16738)
+-- Name: platform_staff platform_staff_email_key; Type: CONSTRAINT; Schema: public; Owner: avnadmin
+--
+
+ALTER TABLE ONLY public.platform_staff
+    ADD CONSTRAINT platform_staff_email_key UNIQUE (email);
+
+
+--
+-- TOC entry 4410 (class 2606 OID 16736)
+-- Name: platform_staff platform_staff_pkey; Type: CONSTRAINT; Schema: public; Owner: avnadmin
+--
+
+ALTER TABLE ONLY public.platform_staff
+    ADD CONSTRAINT platform_staff_pkey PRIMARY KEY (id);
+
+
+--
+-- TOC entry 4392 (class 2606 OID 16556)
 -- Name: rides rides_pkey; Type: CONSTRAINT; Schema: public; Owner: avnadmin
 --
 
@@ -349,7 +391,7 @@ ALTER TABLE ONLY public.rides
 
 
 --
--- TOC entry 4394 (class 2606 OID 16566)
+-- TOC entry 4404 (class 2606 OID 16566)
 -- Name: support_tickets support_tickets_pkey; Type: CONSTRAINT; Schema: public; Owner: avnadmin
 --
 
@@ -358,7 +400,7 @@ ALTER TABLE ONLY public.support_tickets
 
 
 --
--- TOC entry 4388 (class 2606 OID 16560)
+-- TOC entry 4398 (class 2606 OID 16560)
 -- Name: transactions transactions_pkey; Type: CONSTRAINT; Schema: public; Owner: avnadmin
 --
 
@@ -367,7 +409,7 @@ ALTER TABLE ONLY public.transactions
 
 
 --
--- TOC entry 4364 (class 2606 OID 16572)
+-- TOC entry 4374 (class 2606 OID 16572)
 -- Name: users users_email_key; Type: CONSTRAINT; Schema: public; Owner: avnadmin
 --
 
@@ -376,7 +418,7 @@ ALTER TABLE ONLY public.users
 
 
 --
--- TOC entry 4366 (class 2606 OID 16570)
+-- TOC entry 4376 (class 2606 OID 16570)
 -- Name: users users_phone_number_key; Type: CONSTRAINT; Schema: public; Owner: avnadmin
 --
 
@@ -385,7 +427,7 @@ ALTER TABLE ONLY public.users
 
 
 --
--- TOC entry 4368 (class 2606 OID 16548)
+-- TOC entry 4378 (class 2606 OID 16548)
 -- Name: users users_pkey; Type: CONSTRAINT; Schema: public; Owner: avnadmin
 --
 
@@ -394,7 +436,7 @@ ALTER TABLE ONLY public.users
 
 
 --
--- TOC entry 4384 (class 2606 OID 16558)
+-- TOC entry 4394 (class 2606 OID 16558)
 -- Name: wallets wallets_pkey; Type: CONSTRAINT; Schema: public; Owner: avnadmin
 --
 
@@ -403,7 +445,7 @@ ALTER TABLE ONLY public.wallets
 
 
 --
--- TOC entry 4386 (class 2606 OID 16580)
+-- TOC entry 4396 (class 2606 OID 16580)
 -- Name: wallets wallets_user_id_key; Type: CONSTRAINT; Schema: public; Owner: avnadmin
 --
 
@@ -412,7 +454,7 @@ ALTER TABLE ONLY public.wallets
 
 
 --
--- TOC entry 4409 (class 2606 OID 16641)
+-- TOC entry 4423 (class 2606 OID 16641)
 -- Name: driver_actions driver_actions_agent_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: avnadmin
 --
 
@@ -421,7 +463,7 @@ ALTER TABLE ONLY public.driver_actions
 
 
 --
--- TOC entry 4410 (class 2606 OID 16646)
+-- TOC entry 4424 (class 2606 OID 16646)
 -- Name: driver_actions driver_actions_driver_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: avnadmin
 --
 
@@ -430,7 +472,7 @@ ALTER TABLE ONLY public.driver_actions
 
 
 --
--- TOC entry 4398 (class 2606 OID 16586)
+-- TOC entry 4412 (class 2606 OID 16586)
 -- Name: driver_documents driver_documents_driver_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: avnadmin
 --
 
@@ -439,7 +481,7 @@ ALTER TABLE ONLY public.driver_documents
 
 
 --
--- TOC entry 4405 (class 2606 OID 16621)
+-- TOC entry 4419 (class 2606 OID 16621)
 -- Name: driver_ledger driver_ledger_driver_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: avnadmin
 --
 
@@ -448,7 +490,7 @@ ALTER TABLE ONLY public.driver_ledger
 
 
 --
--- TOC entry 4406 (class 2606 OID 16626)
+-- TOC entry 4420 (class 2606 OID 16626)
 -- Name: driver_ledger driver_ledger_ride_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: avnadmin
 --
 
@@ -457,7 +499,7 @@ ALTER TABLE ONLY public.driver_ledger
 
 
 --
--- TOC entry 4407 (class 2606 OID 16631)
+-- TOC entry 4421 (class 2606 OID 16631)
 -- Name: driver_payouts driver_payouts_driver_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: avnadmin
 --
 
@@ -466,7 +508,7 @@ ALTER TABLE ONLY public.driver_payouts
 
 
 --
--- TOC entry 4399 (class 2606 OID 16591)
+-- TOC entry 4413 (class 2606 OID 16591)
 -- Name: driver_vehicles driver_vehicles_driver_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: avnadmin
 --
 
@@ -475,7 +517,7 @@ ALTER TABLE ONLY public.driver_vehicles
 
 
 --
--- TOC entry 4397 (class 2606 OID 16581)
+-- TOC entry 4411 (class 2606 OID 16581)
 -- Name: drivers drivers_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: avnadmin
 --
 
@@ -484,7 +526,16 @@ ALTER TABLE ONLY public.drivers
 
 
 --
--- TOC entry 4400 (class 2606 OID 16596)
+-- TOC entry 4425 (class 2606 OID 16746)
+-- Name: platform_staff platform_staff_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: avnadmin
+--
+
+ALTER TABLE ONLY public.platform_staff
+    ADD CONSTRAINT platform_staff_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.platform_staff(id);
+
+
+--
+-- TOC entry 4414 (class 2606 OID 16596)
 -- Name: rides rides_customer_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: avnadmin
 --
 
@@ -493,7 +544,7 @@ ALTER TABLE ONLY public.rides
 
 
 --
--- TOC entry 4401 (class 2606 OID 16601)
+-- TOC entry 4415 (class 2606 OID 16601)
 -- Name: rides rides_driver_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: avnadmin
 --
 
@@ -502,7 +553,7 @@ ALTER TABLE ONLY public.rides
 
 
 --
--- TOC entry 4408 (class 2606 OID 16636)
+-- TOC entry 4422 (class 2606 OID 16636)
 -- Name: support_tickets support_tickets_created_by_agent_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: avnadmin
 --
 
@@ -511,7 +562,7 @@ ALTER TABLE ONLY public.support_tickets
 
 
 --
--- TOC entry 4403 (class 2606 OID 16616)
+-- TOC entry 4417 (class 2606 OID 16616)
 -- Name: transactions transactions_ride_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: avnadmin
 --
 
@@ -520,7 +571,7 @@ ALTER TABLE ONLY public.transactions
 
 
 --
--- TOC entry 4404 (class 2606 OID 16611)
+-- TOC entry 4418 (class 2606 OID 16611)
 -- Name: transactions transactions_wallet_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: avnadmin
 --
 
@@ -529,7 +580,7 @@ ALTER TABLE ONLY public.transactions
 
 
 --
--- TOC entry 4402 (class 2606 OID 16606)
+-- TOC entry 4416 (class 2606 OID 16606)
 -- Name: wallets wallets_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: avnadmin
 --
 
@@ -537,11 +588,11 @@ ALTER TABLE ONLY public.wallets
     ADD CONSTRAINT wallets_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id);
 
 
--- Completed on 2025-09-02 10:43:00
+-- Completed on 2025-09-13 20:49:03
 
 --
 -- PostgreSQL database dump complete
 --
 
-\unrestrict WPCW6mAE67xAUUrk3s94FM8HOUsIt7AYUznckeJi45Stgm8tIB7EAPDnxZ9KBtc
+\unrestrict n7etftg5NYxiuGh3KBkX0e1lN6yepn2JLGjbkMfeo6i8WYJsHlnOCTHnEP9te31
 

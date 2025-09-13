@@ -44,7 +44,7 @@ router.post('/login', async (req, res) => {
     const payload = {
       agentId: staffMember.id,
       role: staffMember.role,
-      city: staffMember.city
+      city: staffMember.role === 'central_admin' ? 'Central' : staffMember.city
     };
 
     const token = jwt.sign(
