@@ -2,6 +2,7 @@
 const express = require('express');
 const db = require('../db');
 const tokenVerify = require('../middleware/token-verify');
+const { validateQuery, validateBody, sanitizeInput } = require('../middleware/queryValidation');
 
 const router = express.Router();
 
@@ -10,9 +11,9 @@ const router = express.Router();
  * @desc Get support tickets
  * @access Private (City Admin, Support)
  */
-router.get('/tickets', tokenVerify, async (req, res) => {
+router.get('/tickets', tokenVerify, sanitizeInput, validateQuery('supportTickets'), async (req, res) => {
   try {
-    const { agentId } = req.agent;
+    const { agentId } = req.user;
     const { 
       page = 1, 
       limit = 20, 
@@ -90,9 +91,9 @@ router.get('/tickets', tokenVerify, async (req, res) => {
  * @desc Create new support ticket
  * @access Private (City Admin, Support)
  */
-router.post('/tickets', tokenVerify, async (req, res) => {
+router.post('/tickets', tokenVerify, sanitizeInput, validateBody('createTicket'), async (req, res) => {
   try {
-    const { agentId } = req.agent;
+    const { agentId } = req.user;
     const { subject, description, priority = 'medium', category } = req.body;
 
     if (!subject || !description) {
@@ -130,9 +131,9 @@ router.post('/tickets', tokenVerify, async (req, res) => {
  * @desc Update support ticket status
  * @access Private (City Admin, Support)
  */
-router.put('/tickets/:id/status', tokenVerify, async (req, res) => {
+router.put('/tickets/:id/status', tokenVerify, sanitizeInput, validateBody('updateTicketStatus'), async (req, res) => {
   try {
-    const { agentId } = req.agent;
+    const { agentId } = req.user;
     const { id } = req.params;
     const { status } = req.body;
 
@@ -188,9 +189,9 @@ router.put('/tickets/:id/status', tokenVerify, async (req, res) => {
  * @desc Get quick action items for support dashboard
  * @access Private (City Admin, Support)
  */
-router.get('/quick-actions', tokenVerify, async (req, res) => {
+router.get('/quick-actions', tokenVerify, sanitizeInput, async (req, res) => {
   try {
-    const { role, city } = req.agent;
+    const { role, city } = req.user;
 
     let cityCondition = '';
     let params = [];
@@ -282,9 +283,9 @@ router.get('/quick-actions', tokenVerify, async (req, res) => {
  * @desc Get notifications for support staff
  * @access Private (City Admin, Support)
  */
-router.get('/notifications', tokenVerify, async (req, res) => {
+router.get('/notifications', tokenVerify, sanitizeInput, validateQuery('pagination'), async (req, res) => {
   try {
-    const { role, city } = req.agent;
+    const { role, city } = req.user;
     const { page = 1, limit = 20 } = req.query;
 
     const offset = (page - 1) * limit;
@@ -354,9 +355,9 @@ router.get('/notifications', tokenVerify, async (req, res) => {
  * @desc Send broadcast message to drivers/customers
  * @access Private (City Admin only)
  */
-router.post('/broadcast', tokenVerify, async (req, res) => {
+router.post('/broadcast', tokenVerify, sanitizeInput, validateBody('broadcast'), async (req, res) => {
   try {
-    const { role, city } = req.agent;
+    const { role, city } = req.user;
     const { message, target_audience, urgency = 'normal' } = req.body;
 
     // Only city admin can send broadcasts

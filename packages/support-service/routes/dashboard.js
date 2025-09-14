@@ -2,6 +2,7 @@
 const express = require('express');
 const db = require('../db');
 const tokenVerify = require('../middleware/token-verify');
+const { validateQuery, sanitizeInput } = require('../middleware/queryValidation');
 const { isCityRole } = require('../utils/role-utils');
 
 const router = express.Router();
@@ -11,9 +12,9 @@ const router = express.Router();
  * @desc Get dashboard overview metrics for city admin/support
  * @access Private (City Admin, Support)
  */
-router.get('/overview', tokenVerify, async (req, res) => {
+router.get('/overview', tokenVerify, sanitizeInput, validateQuery('dashboardOverview'), async (req, res) => {
   try {
-    const { role, city } = req.agent;
+    const { role, city } = req.user;
     
     // Base query conditions based on role
     const cityCondition = isCityRole(role) ? 
@@ -119,9 +120,9 @@ router.get('/overview', tokenVerify, async (req, res) => {
  * @desc Get analytics data for charts and graphs
  * @access Private (City Admin, Support)
  */
-router.get('/analytics', tokenVerify, async (req, res) => {
+router.get('/analytics', tokenVerify, sanitizeInput, validateQuery('dashboardAnalytics'), async (req, res) => {
   try {
-    const { role, city } = req.agent;
+    const { role, city } = req.user;
     const { period = '7d' } = req.query;
 
     const cityCondition = isCityRole(role) ? 

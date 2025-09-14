@@ -2,6 +2,7 @@
 const express = require('express');
 const db = require('../db');
 const tokenVerify = require('../middleware/token-verify');
+const { validateQuery, validateBody, sanitizeInput } = require('../middleware/queryValidation');
 
 const router = express.Router();
 
@@ -10,9 +11,9 @@ const router = express.Router();
  * @desc Get list of drivers with filtering and pagination
  * @access Private (City Admin, Support)
  */
-router.get('/', tokenVerify, async (req, res) => {
+router.get('/', tokenVerify, sanitizeInput, validateQuery('driversList'), async (req, res) => {
     try {
-        const { role, city } = req.agent;
+        const { role, city } = req.user;
         const {
             page = 1,
             limit = 20,
@@ -120,9 +121,9 @@ router.get('/', tokenVerify, async (req, res) => {
  * @desc Get detailed driver information
  * @access Private (City Admin, Support)
  */
-router.get('/:id', tokenVerify, async (req, res) => {
+router.get('/:id', tokenVerify, sanitizeInput, async (req, res) => {
     try {
-        const { role, city } = req.agent;
+        const { role, city } = req.user;
         const { id } = req.params;
 
         let cityCondition = '';
@@ -224,9 +225,9 @@ router.get('/:id', tokenVerify, async (req, res) => {
  * @desc Update driver status (approve/suspend/activate)
  * @access Private (City Admin)
  */
-router.put('/:id/status', tokenVerify, async (req, res) => {
+router.put('/:id/status', tokenVerify, sanitizeInput, validateBody('driverStatusUpdate'), async (req, res) => {
     try {
-        const { role, city, agentId } = req.agent;
+        const { role, city, agentId } = req.user;
         const { id } = req.params;
         const { status, reason } = req.body;
 
@@ -299,9 +300,9 @@ router.put('/:id/status', tokenVerify, async (req, res) => {
  * @desc Verify or reject driver document
  * @access Private (City Admin, Support)
  */
-router.put('/:id/documents/:docId/verify', tokenVerify, async (req, res) => {
+router.put('/:id/documents/:docId/verify', tokenVerify, sanitizeInput, validateBody('driverDocumentVerify'), async (req, res) => {
     try {
-        const { role, city } = req.agent;
+        const { role, city } = req.user;
         const { id, docId } = req.params;
         const { status, rejection_reason } = req.body;
 
@@ -377,9 +378,9 @@ router.put('/:id/documents/:docId/verify', tokenVerify, async (req, res) => {
  * @desc Add action/penalty to driver
  * @access Private (City Admin)
  */
-router.post('/:id/actions', tokenVerify, async (req, res) => {
+router.post('/:id/actions', tokenVerify, sanitizeInput, validateBody('driverAction'), async (req, res) => {
     try {
-        const { role, city, agentId } = req.agent;
+        const { role, city, agentId } = req.user;
         const { id } = req.params;
         const { action_type, reason, fine_amount, suspension_duration } = req.body;
 

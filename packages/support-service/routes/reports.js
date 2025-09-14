@@ -2,6 +2,7 @@
 const express = require('express');
 const db = require('../db');
 const tokenVerify = require('../middleware/token-verify');
+const { validateQuery, sanitizeInput } = require('../middleware/queryValidation');
 
 const router = express.Router();
 
@@ -10,9 +11,9 @@ const router = express.Router();
  * @desc Generate daily operations report
  * @access Private (City Admin, Support)
  */
-router.get('/daily', tokenVerify, async (req, res) => {
+router.get('/daily', tokenVerify, sanitizeInput, validateQuery('dailyReport'), async (req, res) => {
   try {
-    const { role, city } = req.agent;
+    const { role, city } = req.user;
     const { date = new Date().toISOString().split('T')[0] } = req.query;
 
     let cityCondition = '';
@@ -101,9 +102,9 @@ router.get('/daily', tokenVerify, async (req, res) => {
  * @desc Generate weekly operations report
  * @access Private (City Admin, Support)
  */
-router.get('/weekly', tokenVerify, async (req, res) => {
+router.get('/weekly', tokenVerify, sanitizeInput, validateQuery('weeklyReport'), async (req, res) => {
   try {
-    const { role, city } = req.agent;
+    const { role, city } = req.user;
     const { week_start } = req.query;
 
     let startDate = week_start ? new Date(week_start) : new Date();
@@ -183,9 +184,9 @@ router.get('/weekly', tokenVerify, async (req, res) => {
  * @desc Generate financial report
  * @access Private (City Admin only)
  */
-router.get('/financial', tokenVerify, async (req, res) => {
+router.get('/financial', tokenVerify, sanitizeInput, validateQuery('financialReport'), async (req, res) => {
   try {
-    const { role, city } = req.agent;
+    const { role, city } = req.user;
     const { 
       start_date, 
       end_date,
@@ -299,9 +300,9 @@ router.get('/financial', tokenVerify, async (req, res) => {
  * @desc Generate driver performance report
  * @access Private (City Admin, Support)
  */
-router.get('/driver-performance', tokenVerify, async (req, res) => {
+router.get('/driver-performance', tokenVerify, sanitizeInput, validateQuery('driverPerformanceReport'), async (req, res) => {
   try {
-    const { role, city } = req.agent;
+    const { role, city } = req.user;
     const { 
       period = '30d',
       sort_by = 'total_rides',

@@ -2,6 +2,7 @@
 const express = require('express');
 const db = require('../db');
 const tokenVerify = require('../middleware/token-verify');
+const { validateQuery, validateBody, sanitizeInput } = require('../middleware/queryValidation');
 
 const router = express.Router();
 
@@ -10,9 +11,9 @@ const router = express.Router();
  * @desc Get list of rides with filtering and pagination
  * @access Private (City Admin, Support)
  */
-router.get('/', tokenVerify, async (req, res) => {
+router.get('/', tokenVerify, sanitizeInput, validateQuery('ridesList'), async (req, res) => {
   try {
-    const { role, city } = req.agent;
+    const { role, city } = req.user;
     const { 
       page = 1, 
       limit = 20, 
@@ -136,9 +137,9 @@ router.get('/', tokenVerify, async (req, res) => {
  * @desc Get detailed ride information
  * @access Private (City Admin, Support)
  */
-router.get('/:id', tokenVerify, async (req, res) => {
+router.get('/:id', tokenVerify, sanitizeInput, async (req, res) => {
   try {
-    const { role, city } = req.agent;
+    const { role, city } = req.user;
     const { id } = req.params;
 
     let cityCondition = '';
@@ -216,9 +217,9 @@ router.get('/:id', tokenVerify, async (req, res) => {
  * @desc Update ride status (for emergency interventions)
  * @access Private (City Admin)
  */
-router.put('/:id/status', tokenVerify, async (req, res) => {
+router.put('/:id/status', tokenVerify, sanitizeInput, validateBody('rideStatusUpdate'), async (req, res) => {
   try {
-    const { role, city } = req.agent;
+    const { role, city } = req.user;
     const { id } = req.params;
     const { status, reason } = req.body;
 
@@ -288,9 +289,9 @@ router.put('/:id/status', tokenVerify, async (req, res) => {
  * @desc Get ride analytics summary
  * @access Private (City Admin, Support)
  */
-router.get('/analytics/summary', tokenVerify, async (req, res) => {
+router.get('/analytics/summary', tokenVerify, sanitizeInput, validateQuery('rideAnalytics'), async (req, res) => {
   try {
-    const { role, city } = req.agent;
+    const { role, city } = req.user;
     const { period = '7d' } = req.query;
 
     let dateCondition = '';
