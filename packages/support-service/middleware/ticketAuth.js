@@ -22,7 +22,7 @@ const authenticateAgent = async (req, res, next) => {
         // Fetch agent details from database
         const result = await query(
             'SELECT id, full_name, email, role, city, status FROM platform_staff WHERE id = $1',
-            [decoded.userId]
+            [decoded.agentId]
         );
 
         if (result.rows.length === 0) {
@@ -47,7 +47,8 @@ const authenticateAgent = async (req, res, next) => {
             });
         }
 
-        if (agent.role !== 'support') {
+        // Allow both support and city_admin roles
+        if (!['support', 'city_admin', 'central_admin'].includes(agent.role)) {
             return res.status(403).json({
                 error: {
                     type: 'AUTHORIZATION_ERROR',
