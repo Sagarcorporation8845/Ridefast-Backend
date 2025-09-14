@@ -62,6 +62,16 @@ const updateAgentStatus = async (req, res) => {
             await assignmentEngine.handleAgentOffline(agentId);
         }
         
+        // Handle agent coming online - try to assign unassigned tickets
+        if (status === 'online') {
+            const assignmentEngine = new TicketAssignmentEngine();
+            const assignedCount = await assignmentEngine.assignUnassignedTickets(agentId, req.agent.city);
+            
+            if (assignedCount > 0) {
+                console.log(`[agentController] Agent ${agentId} came online and was assigned ${assignedCount} unassigned tickets`);
+            }
+        }
+        
         res.json({
             success: true,
             data: {

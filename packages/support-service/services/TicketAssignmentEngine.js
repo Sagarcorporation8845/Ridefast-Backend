@@ -315,6 +315,155 @@ class TicketAssignmentEngine {
     }
 
     /**
+     * Assign unassigned tickets when an agent comes online
+     * @param {string} agentId - The agent who came online
+     * @param {string} city - The city of the agent
+     * @returns {Promise<number>} - Number of tickets assigned
+     */
+    async assignUnassignedTickets(agentId, city) {
+        try {
+            console.log(`[TicketAssignmentEngine] Agent ${agentId} came online in ${city}, checking for unassigned tickets`);
+            
+            // Get unassigned tickets in the same city, ordered by priority and creation time
+            const unassignedTickets = await query(`
+                SELECT st.id, st.subject, st.priority, st.created_at
+                FROM support_tickets st
+                WHERE st.city = $1 
+                AND st.assigned_agent_id IS NULL 
+                AND st.status IN ('open', 'in_progress')
+                ORDER BY 
+                    CASE st.priority 
+                        WHEN 'urgent' THEN 1 
+                        WHEN 'high' THEN 2 
+                        WHEN 'normal' THEN 3 
+                        WHEN 'low' THEN 4 
+                    END,
+                    st.created_at ASC
+                LIMIT $2
+            `, [city, this.maxTicketsPerAgent]);
+            
+            if (unassignedTickets.rows.length === 0) {
+                console.log(`[TicketAssignmentEngine] No unassigned tickets found in ${city}`);
+                return 0;
+            }
+            
+            let assignedCount = 0;
+            
+            for (const ticket of unassignedTickets.rows) {
+                // Check if agent still has capacity
+                const agentStatus = await query(
+                    'SELECT COALESCE(active_tickets_count, 0) as count FROM agent_status WHERE agent_id = $1',
+                    [agentId]
+                );
+                
+                const currentCount = agentStatus.rows[0]?.count || 0;
+                if (currentCount >= this.maxTicketsPerAgent) {
+                    console.log(`[TicketAssignmentEngine] Agent ${agentId} at capacity, stopping assignment`);
+                    break;
+                }
+                
+                // Assign the ticket
+                const assigned = await this.assignToAgent(ticket.id, agentId);
+                if (assigned) {
+                    assignedCount++;
+                    console.log(`[TicketAssignmentEngine] Assigned unassigned ticket ${ticket.id} to agent ${agentId}`);
+                    await this.notifyAgent(agentId, ticket.id);
+                }
+            }
+            
+            console.log(`[TicketAssignmentEngine] Assigned ${assignedCount} unassigned tickets to agent ${agentId}`);
+            return assignedCount;
+            
+        } catch (error) {
+            console.error(`[TicketAssignmentEngine] Error assigning unassigned tickets to agent ${agentId}:`, error);
+            return 0;
+        }
+    }
+
+    /**
+     * Manually assign all unassigned tickets in a city to available agents
+     * @param {string} city - The city to process
+     * @returns {Promise<Object>} - Assignment results
+     */
+    async assignAllUnassignedTickets(city) {
+        try {
+            console.log(`[TicketAssignmentEngine] Manual assignment requested for unassigned tickets in ${city}`);
+            
+            // Get all unassigned tickets in the city
+            const unassignedTickets = await query(`
+                SELECT st.id, st.subject, st.priority, st.created_at
+                FROM support_tickets st
+                WHERE st.city = $1 
+                AND st.assigned_agent_id IS NULL 
+                AND st.status IN ('open', 'in_progress')
+                ORDER BY 
+                    CASE st.priority 
+                        WHEN 'urgent' THEN 1 
+                        WHEN 'high' THEN 2 
+                        WHEN 'normal' THEN 3 
+                        WHEN 'low' THEN 4 
+                    END,
+                    st.created_at ASC
+            `, [city]);
+            
+            if (unassignedTickets.rows.length === 0) {
+                return {
+                    success: true,
+                    message: 'No unassigned tickets found',
+                    assignedCount: 0,
+                    tickets: []
+                };
+            }
+            
+            const results = {
+                success: true,
+                message: `Processed ${unassignedTickets.rows.length} unassigned tickets`,
+                assignedCount: 0,
+                unassignedCount: 0,
+                tickets: []
+            };
+            
+            for (const ticket of unassignedTickets.rows) {
+                const assignedAgentId = await this.assignTicket(ticket.id, city);
+                
+                if (assignedAgentId) {
+                    results.assignedCount++;
+                    results.tickets.push({
+                        ticketId: ticket.id,
+                        subject: ticket.subject,
+                        priority: ticket.priority,
+                        assignedAgentId: assignedAgentId,
+                        status: 'assigned'
+                    });
+                } else {
+                    results.unassignedCount++;
+                    results.tickets.push({
+                        ticketId: ticket.id,
+                        subject: ticket.subject,
+                        priority: ticket.priority,
+                        assignedAgentId: null,
+                        status: 'unassigned'
+                    });
+                }
+            }
+            
+            console.log(`[TicketAssignmentEngine] Manual assignment completed: ${results.assignedCount} assigned, ${results.unassignedCount} unassigned`);
+            return results;
+            
+        } catch (error) {
+            console.error(`[TicketAssignmentEngine] Error in manual assignment for ${city}:`, error);
+            return {
+                success: false,
+                message: 'Failed to process unassigned tickets',
+                error: error.message,
+                assignedCount: 0,
+                unassignedCount: 0,
+                tickets: []
+            };
+        }
+    }
+
+    /**
      * Get assignment statistics for monitoring
      * @param {string} city - City to get stats for (optional)
      * @returns {Promise<Object>} - Assignment statistics
