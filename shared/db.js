@@ -3,8 +3,8 @@ const { Pool } = require('pg');
 const fs = require('fs');
 const path = require('path');
 
-// Load CA certificate from support-service (or any service that has it)
-const caPath = path.join(__dirname, '../packages/support-service/ca.pem');
+// Load CA certificate from root directory
+const caPath = path.join(__dirname, '../ca.pem');
 const caCert = fs.readFileSync(caPath).toString();
 
 // Load environment variables from root .env or use defaults

@@ -23,7 +23,7 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/onboarding', onboardingRoutes);
 app.use('/profile', profileRoutes); 
 
-const PORT = process.env.DRIVER_SERVICE_PORT || 3002;
+const PORT = process.env.PORT || 3002;
 
 // Health check route
 app.get('/', (req, res) => {

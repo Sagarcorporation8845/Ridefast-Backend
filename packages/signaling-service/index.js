@@ -17,7 +17,7 @@ const io = socketIo(server, {
     }
 });
 
-const PORT = process.env.SIGNALING_SERVICE_PORT || 3005;
+const PORT = process.env.PORT || 3005;
 
 // --- Middleware ---
 app.use(cors());

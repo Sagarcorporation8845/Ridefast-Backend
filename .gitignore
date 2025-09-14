@@ -20,6 +20,7 @@ pids
 .env
 .env.test
 .env.production
+.env.*.local
 
 # OS-specific files
 .DS_Store

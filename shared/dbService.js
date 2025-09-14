@@ -28,8 +28,8 @@ class DatabaseService {
         require('dotenv').config({ path: envPath });
       }
 
-      // Load CA certificate
-      const caPath = path.join(this.serviceDir, 'ca.pem');
+      // Load CA certificate from root directory
+      const caPath = path.join(__dirname, '../ca.pem');
       if (!fs.existsSync(caPath)) {
         throw new Error(`CA certificate not found at ${caPath}`);
       }

@@ -4,11 +4,11 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "start:user-service": "nodemon packages/user-service/index.js",
-    "start:driver-service": "nodemon packages/driver-service/index.js",
-    "start:support-service": "nodemon packages/support-service/index.js",
-    "start:admin-service": "nodemon packages/admin-service/index.js",
-    "start:signaling-service": "nodemon packages/signaling-service/index.js",
+    "start:user-service": "cross-env PORT=3001 nodemon packages/user-service/index.js",
+    "start:driver-service": "cross-env PORT=3002 nodemon packages/driver-service/index.js",
+    "start:support-service": "cross-env PORT=3003 nodemon packages/support-service/index.js",
+    "start:admin-service": "cross-env PORT=3004 nodemon packages/admin-service/index.js",
+    "start:signaling-service": "cross-env PORT=3005 nodemon packages/signaling-service/index.js",
     "dev": "concurrently \"npm:start\" \"npm:start:user-service\" \"npm:start:driver-service\" \"npm:start:support-service\" \"npm:start:admin-service\" \"npm:start:signaling-service\"",
     "validate-swagger": "node scripts/validate-swagger.js",
     "test-db": "node scripts/test-db-connection-new.js",
@@ -29,6 +29,7 @@
   },
   "devDependencies": {
     "concurrently": "^9.2.0",
+    "cross-env": "^7.0.3",
     "nodemon": "^3.1.10"
   }
 }

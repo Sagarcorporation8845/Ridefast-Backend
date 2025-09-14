@@ -35,7 +35,7 @@ app.use('/reports', reportsRoutes);
 app.use('/tickets', ticketsRoutes);
 app.use('/agent', agentRoutes);
 
-const PORT = process.env.SUPPORT_SERVICE_PORT || 3003;
+const PORT = process.env.PORT || 3003;
 
 // Health check route
 app.get('/', (req, res) => {

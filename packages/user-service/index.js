@@ -12,7 +12,7 @@ const locationRoutes = require('./routes/locations');
 const app = express();
 app.use(express.json());
 
-const PORT = process.env.USER_SERVICE_PORT || 3001;
+const PORT = process.env.PORT || 3001;
 
 // API ROUTES
 app.use('/auth', authRoutes);
