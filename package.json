@@ -7,7 +7,12 @@
     "start:user-service": "nodemon packages/user-service/index.js",
     "start:driver-service": "nodemon packages/driver-service/index.js",
     "start:support-service": "nodemon packages/support-service/index.js",
-    "dev": "concurrently \"npm:start\" \"npm:start:user-service\" \"npm:start:driver-service\" \"npm:start:support-service\""
+    "start:admin-service": "nodemon packages/admin-service/index.js",
+    "start:signaling-service": "nodemon packages/signaling-service/index.js",
+    "dev": "concurrently \"npm:start\" \"npm:start:user-service\" \"npm:start:driver-service\" \"npm:start:support-service\" \"npm:start:admin-service\" \"npm:start:signaling-service\"",
+    "validate-swagger": "node scripts/validate-swagger.js",
+    "test-db": "node scripts/test-db-connection-new.js",
+    "docs": "echo 'API Documentation available at http://localhost/api-docs'"
   },
   "keywords": [],
   "author": "",
@@ -15,8 +20,12 @@
   "description": "",
   "dependencies": {
     "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
     "express": "^5.1.0",
-    "http-proxy-middleware": "^3.0.0"
+    "http-proxy-middleware": "^3.0.0",
+    "pg": "^8.16.3",
+    "swagger-jsdoc": "^6.2.8",
+    "swagger-ui-express": "^5.0.0"
   },
   "devDependencies": {
     "concurrently": "^9.2.0",

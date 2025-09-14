@@ -14,6 +14,8 @@ const ridesRoutes = require('./routes/rides');
 const usersRoutes = require('./routes/users');
 const supportRoutes = require('./routes/support');
 const reportsRoutes = require('./routes/reports');
+const ticketsRoutes = require('./routes/tickets');
+const agentRoutes = require('./routes/agent');
 
 const app = express();
 
@@ -30,6 +32,8 @@ app.use('/rides', ridesRoutes);
 app.use('/users', usersRoutes);
 app.use('/support', supportRoutes);
 app.use('/reports', reportsRoutes);
+app.use('/tickets', ticketsRoutes);
+app.use('/agent', agentRoutes);
 
 const PORT = process.env.SUPPORT_SERVICE_PORT || 3003;
 

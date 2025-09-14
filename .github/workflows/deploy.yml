@@ -51,6 +51,16 @@ jobs:
             cd ../support-service
             npm install
             
+            # Install/update dependencies for the admin-service
+            echo "Installing admin-service dependencies..."
+            cd ../admin-service
+            npm install
+            
+            # Install/update dependencies for the signaling-service
+            echo "Installing signaling-service dependencies..."
+            cd ../signaling-service
+            npm install
+            
             # Go back to the root project directory
             cd ../..
 

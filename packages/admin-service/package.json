@@ -1,29 +1,31 @@
 {
-  "name": "support-service",
+  "name": "admin-service",
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
-    "test": "echo \"No tests specified\" && exit 0"
+    "test": "jest"
   },
   "dependencies": {
-    "axios": "^1.6.0",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
+    "express-rate-limit": "^7.1.5",
+    "helmet": "^7.1.0",
     "joi": "^17.11.0",
     "jsonwebtoken": "^9.0.2",
     "pg": "^8.16.3"
   },
   "devDependencies": {
-    "nodemon": "^3.1.0"
+    "jest": "^29.7.0",
+    "nodemon": "^3.1.0",
+    "supertest": "^6.3.3"
   },
-  "description": "RideFast Support Service - Backend API for city admin and support staff operations",
+  "description": "RideFast Admin Service - Backend API for administrative operations",
   "keywords": [
     "ridefast",
-    "support",
     "admin",
     "api"
   ],
