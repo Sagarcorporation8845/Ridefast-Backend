@@ -2,6 +2,7 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const db = require('../db');
+const { sanitizeInput, validateBody } = require('../middleware/validation');
 
 const router = express.Router();
 
@@ -9,16 +10,8 @@ const router = express.Router();
  * @route POST /auth/login
  * @desc Validates phone number and simulates sending a dynamic OTP.
  */
-router.post('/login', async (req, res) => {
+router.post('/login', sanitizeInput, validateBody('authLogin'), async (req, res) => {
   const { countryCode, phoneNumber } = req.body;
-
-  if (!phoneNumber || !countryCode) {
-    return res.status(400).json({ message: 'Country code and phone number are required.' });
-  }
-
-  if (!/^\d{10}$/.test(phoneNumber)) {
-    return res.status(400).json({ message: 'Phone number must be exactly 10 digits.' });
-  }
 
   const dynamicOtp = phoneNumber.slice(-4);
   const fullPhoneNumber = `${countryCode}${phoneNumber}`;
@@ -34,12 +27,8 @@ router.post('/login', async (req, res) => {
  * @route POST /auth/verify-otp
  * @desc Verifies OTP, creates/finds a user, checks for a driver profile, and returns a JWT with a list of roles.
  */
-router.post('/verify-otp', async (req, res) => {
+router.post('/verify-otp', sanitizeInput, validateBody('authVerifyOtp'), async (req, res) => {
   const { countryCode, phoneNumber, otp } = req.body;
-
-  if (!phoneNumber || !otp || !countryCode) {
-    return res.status(400).json({ message: 'Country code, phone number, and OTP are required.' });
-  }
 
   const expectedOtp = phoneNumber.slice(-4);
   if (otp !== expectedOtp) {
