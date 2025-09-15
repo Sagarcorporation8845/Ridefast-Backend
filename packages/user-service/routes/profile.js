@@ -2,7 +2,6 @@
 const express = require('express');
 const db = require('../db');
 const tokenVerify = require('../middleware/token-verify'); 
-const { sanitizeInput, validateBody } = require('../middleware/validation');
 
 const router = express.Router();
 
@@ -54,9 +53,16 @@ router.get('/', tokenVerify, async (req, res) => {
  * @desc Updates the profile details for the authenticated user.
  * @access Private (requires token)
  */
-router.put('/update', tokenVerify, sanitizeInput, validateBody('userProfileUpdate'), async (req, res) => {
+router.put('/update', tokenVerify, async (req, res) => {
   const { fullName, email, dob, gender } = req.body;
   const userId = req.user.userId;
+
+  if (!fullName || !email || !dob || !gender) {
+    return res.status(400).json({ message: 'All fields are required.' });
+  }
+  if (!/\S+@\S+\.\S+/.test(email)) {
+    return res.status(400).json({ message: 'Invalid email format.' });
+  }
 
   try {
     const query = `
