@@ -41,6 +41,11 @@ router.post('/verify-otp', async (req, res) => {
     return res.status(400).json({ message: 'Country code, phone number, and OTP are required.' });
   }
 
+  // Enforce exactly 10 numeric digits for the local phone number
+  if (!/^\d{10}$/.test(phoneNumber)) {
+    return res.status(400).json({ message: 'Phone number must be exactly 10 digits.' });
+  }
+
   const expectedOtp = phoneNumber.slice(-4);
   if (otp !== expectedOtp) {
     return res.status(401).json({ message: 'Invalid OTP.' });
