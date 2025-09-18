@@ -27,12 +27,15 @@ jobs:
           script: |
             # Navigate to the project directory defined in your secrets
             cd ${{ secrets.PROJECT_PATH }}
-            
             echo "Fetching latest code..."
-            git fetch origin
+
+            #git fetch origin
             
-            echo "Resetting to remote main branch..."
-            git reset --hard origin/main
+            #echo "Resetting to remote main branch..."
+            #git reset --hard origin/main
+            # Pull the latest changes from the main branch
+            echo "Pulling latest code from main branch..."
+            git pull origin main
             
             # Install root dependencies (like concurrently)
             echo "Installing root dependencies..."

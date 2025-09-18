@@ -2,6 +2,9 @@
 const express = require('express');
 const db = require('../db');
 const tokenVerify = require('../middleware/token-verify');
+const axios = require('axios');
+const LOCATION_SERVICE_URL = process.env.LOCATION_SERVICE_URL || 'http://localhost:3006';
+const SIGNALING_SERVICE_URL = process.env.SIGNALING_SERVICE_URL || 'http://localhost:3005';
 
 const router = express.Router();
 
@@ -61,3 +64,80 @@ router.put('/save', tokenVerify, async (req, res) => {
 });
 
 module.exports = router;
+
+/**
+ * @route POST /locations/nearby-drivers
+ * @desc Finds nearby drivers via Redis (signaling-service) and returns ETAs using location-service
+ * @access Public (or Private if needed)
+ */
+router.post('/nearby-drivers', async (req, res) => {
+  try {
+    const { pickup, city, vehicleType, radiusKm = 5 } = req.body;
+
+    if (!pickup || pickup.lat === undefined || pickup.lng === undefined) {
+      return res.status(400).json({ message: 'pickup {lat,lng} is required' });
+    }
+    if (!city || !vehicleType) {
+      return res.status(400).json({ message: 'city and vehicleType are required' });
+    }
+
+    // 1) Ask signaling-service for nearby drivers with coordinates
+    const nearbyResp = await axios.post(`${SIGNALING_SERVICE_URL}/nearby-drivers`, {
+      pickupLocation: { lat: pickup.lat, lng: pickup.lng },
+      city,
+      vehicleType,
+      radius: radiusKm
+    });
+
+    const drivers = nearbyResp.data?.drivers || [];
+    if (drivers.length === 0) {
+      return res.json({ drivers: [], etas: [], count: 0 });
+    }
+
+    // 2) Build origins list for Distance Matrix (driver coords)
+    const origins = drivers
+      .filter(d => d.coordinates && d.coordinates.lat !== undefined && d.coordinates.lng !== undefined)
+      .map(d => `${d.coordinates.lat},${d.coordinates.lng}`);
+
+    if (origins.length === 0) {
+      return res.json({ drivers: [], etas: [], count: 0 });
+    }
+
+    const destination = `${pickup.lat},${pickup.lng}`;
+
+    // 3) Call location-service distance-matrix once for all drivers
+    const dmResp = await axios.post(`${LOCATION_SERVICE_URL}/distance-matrix`, {
+      origins,
+      destination,
+      mode: 'driving'
+    });
+
+    const rows = dmResp.data?.rows || [];
+
+    // 4) Pair ETAs back to drivers
+    const results = drivers.slice(0, rows.length).map((driver, idx) => {
+      const elements = rows[idx]?.elements?.[0];
+      return {
+        driverId: driver.driverId,
+        vehicleType: driver.vehicleType,
+        city: driver.city,
+        coordinates: driver.coordinates,
+        distanceText: elements?.distance?.text,
+        distanceMeters: elements?.distance?.value,
+        durationText: elements?.duration?.text,
+        durationSeconds: elements?.duration?.value
+      };
+    }).filter(r => r.durationSeconds !== undefined);
+
+    // 5) Sort by ETA ascending
+    results.sort((a, b) => a.durationSeconds - b.durationSeconds);
+
+    res.json({
+      count: results.length,
+      drivers: results
+    });
+  } catch (err) {
+    console.error('Error getting nearby drivers/ETAs:', err.message);
+    res.status(500).json({ message: 'Failed to get nearby drivers', error: err.message });
+  }
+});

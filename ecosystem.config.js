@@ -43,6 +43,27 @@ module.exports = {
       env: {
         PORT: process.env.SIGNALING_SERVICE_PORT || 3005
       }
+    }, {
+      name   : "location-service",
+      script : "./packages/location-service/index.js",
+      watch: false,
+      env: {
+        PORT: process.env.LOCATION_SERVICE_PORT || 3006
+      }
+    }, {
+      name   : "pricing-service",
+      script : "./packages/pricing-service/index.js",
+      watch: false,
+      env: {
+        PORT: process.env.PRICING_SERVICE_PORT || 3007
+      }
+    }, {
+      name   : "ride-service",
+      script : "./packages/ride-service/index.js",
+      watch: false,
+      env: {
+        PORT: process.env.RIDE_SERVICE_PORT || 3008
+      }
     }]
   }
   

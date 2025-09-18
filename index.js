@@ -17,6 +17,9 @@ const DRIVER_SERVICE_URL = 'http://localhost:3002';
 const SUPPORT_SERVICE_URL = 'http://localhost:3003';
 const ADMIN_SERVICE_URL = 'http://localhost:3004';
 const SIGNALING_SERVICE_URL = 'http://localhost:3005';
+const LOCATION_SERVICE_URL = 'http://localhost:3006';
+const PRICING_SERVICE_URL = 'http://localhost:3007';
+const RIDE_SERVICE_URL = 'http://localhost:3008';
 
 // --- Middleware ---
 app.use(cors());
@@ -50,7 +53,10 @@ app.get('/', (req, res) => {
             'driver-service': '/driver-service', 
             'support-service': '/support-service',
             'admin-service': '/admin-service',
-            'signaling-service': '/signaling-service'
+            'signaling-service': '/signaling-service',
+            'location-service': '/location-service',
+            'pricing-service': '/pricing-service',
+            'ride-service': '/ride-service'
         },
         timestamp: new Date().toISOString()
     });
@@ -101,6 +107,33 @@ app.use('/signaling-service', createProxyMiddleware({
     ws: true, // Enable WebSocket proxying
     pathRewrite: {
         '^/signaling-service': '', // remove the prefix
+    },
+}));
+
+// Proxy requests for the Location Service
+app.use('/location-service', createProxyMiddleware({
+    target: LOCATION_SERVICE_URL,
+    changeOrigin: true,
+    pathRewrite: {
+        '^/location-service': '', // remove the prefix
+    },
+}));
+
+// Proxy requests for the Pricing Service
+app.use('/pricing-service', createProxyMiddleware({
+    target: PRICING_SERVICE_URL,
+    changeOrigin: true,
+    pathRewrite: {
+        '^/pricing-service': '', // remove the prefix
+    },
+}));
+
+// Proxy requests for the Ride Service
+app.use('/ride-service', createProxyMiddleware({
+    target: RIDE_SERVICE_URL,
+    changeOrigin: true,
+    pathRewrite: {
+        '^/ride-service': '', // remove the prefix
     },
 }));
 

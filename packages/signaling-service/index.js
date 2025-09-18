@@ -3,6 +3,7 @@ const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
 const cors = require('cors');
+const { createClient } = require('redis');
 require('dotenv').config();
 
 const app = express();
@@ -19,6 +20,23 @@ const io = socketIo(server, {
 
 const PORT = process.env.PORT || 3005;
 
+// --- Redis Configuration ---
+const redisClient = createClient({ 
+    url: process.env.REDIS_URI || 'redis://localhost:6379' 
+});
+
+redisClient.on('error', err => console.log('[signaling-service] Redis Client Error:', err));
+
+// Connect to Redis
+(async () => {
+    try {
+        await redisClient.connect();
+        console.log('[signaling-service] Connected to Redis successfully!');
+    } catch (error) {
+        console.error('[signaling-service] Failed to connect to Redis:', error);
+    }
+})();
+
 // --- Middleware ---
 app.use(cors());
 app.use(express.json());
@@ -32,6 +50,70 @@ app.get('/', (req, res) => {
         timestamp: new Date().toISOString(),
         connectedClients: io.engine.clientsCount
     });
+});
+
+// REST endpoint for finding nearby drivers (used by other services)
+app.post('/nearby-drivers', async (req, res) => {
+    try {
+        const { pickupLocation, city, vehicleType, radius = 5 } = req.body;
+        
+        if (!pickupLocation || !city || !vehicleType) {
+            return res.status(400).json({
+                error: 'Missing required parameters',
+                message: 'pickupLocation, city, and vehicleType are required'
+            });
+        }
+
+        const key = `driver_locations:${city}:${vehicleType}`;
+        
+        // Use Redis GEOSEARCH to find nearby drivers
+        const nearbyDrivers = await redisClient.geoSearch(
+            key,
+            {
+                longitude: pickupLocation.lng,
+                latitude: pickupLocation.lat,
+                radius: radius,
+                unit: 'km'
+            },
+            { SORT: 'ASC' } // Sort by distance (closest first)
+        );
+
+        // Get coordinates for each driver
+        const positions = await redisClient.geoPos(key, nearbyDrivers);
+
+        // Get additional driver info for each nearby driver
+        const driverDetails = [];
+        for (let i = 0; i < nearbyDrivers.length; i++) {
+            const driverId = nearbyDrivers[i];
+            const pos = positions?.[i];
+            const driverStatus = await redisClient.hGetAll(`driver_status:${driverId}`);
+            if (driverStatus.status === 'available' && pos) {
+                driverDetails.push({
+                    driverId,
+                    ...driverStatus,
+                    coordinates: { lat: parseFloat(pos.latitude), lng: parseFloat(pos.longitude) }
+                });
+            }
+        }
+
+        console.log(`[signaling-service] REST API: Found ${driverDetails.length} nearby drivers for ${vehicleType} in ${city}`);
+        
+        res.json({
+            success: true,
+            drivers: driverDetails,
+            count: driverDetails.length,
+            searchRadius: radius,
+            city,
+            vehicleType
+        });
+
+    } catch (error) {
+        console.error('[signaling-service] REST API error finding nearby drivers:', error);
+        res.status(500).json({
+            error: 'Failed to find nearby drivers',
+            message: error.message
+        });
+    }
 });
 
 // WebSocket connection handling
@@ -110,6 +192,131 @@ io.on('connection', (socket) => {
         });
         
         console.log(`[signaling-service] Alert sent to city admins in ${city}: ${alertType}`);
+    });
+
+    // Handle driver location updates
+    socket.on('driverLocationUpdate', async (data) => {
+        try {
+            const { driverId, city, vehicleType, location } = data;
+            
+            if (!driverId || !city || !vehicleType || !location || !location.lat || !location.lng) {
+                socket.emit('error', { message: 'Invalid location update data' });
+                return;
+            }
+
+            const key = `driver_locations:${city}:${vehicleType}`;
+
+            // Add the driver's location using Redis geospatial commands
+            await redisClient.geoAdd(key, {
+                longitude: location.lng,
+                latitude: location.lat,
+                member: driverId,
+            });
+
+            // Set expiry to manage memory (60 seconds)
+            await redisClient.expire(key, 60);
+
+            // Store driver status for quick lookup
+            await redisClient.hSet(`driver_status:${driverId}`, {
+                city,
+                vehicleType,
+                status: 'available',
+                lastUpdate: new Date().toISOString()
+            });
+            await redisClient.expire(`driver_status:${driverId}`, 60);
+
+            console.log(`[signaling-service] Driver ${driverId} location updated in ${city} for ${vehicleType}`);
+            
+            socket.emit('locationUpdateConfirmed', { success: true });
+
+        } catch (error) {
+            console.error('[signaling-service] Error updating driver location:', error);
+            socket.emit('error', { message: 'Failed to update location' });
+        }
+    });
+
+    // Handle finding nearby drivers
+    socket.on('findNearbyDrivers', async (data) => {
+        try {
+            const { pickupLocation, city, vehicleType, radius = 5 } = data;
+            
+            if (!pickupLocation || !city || !vehicleType) {
+                socket.emit('error', { message: 'Missing required parameters for finding drivers' });
+                return;
+            }
+
+            const key = `driver_locations:${city}:${vehicleType}`;
+            
+            // Use Redis GEOSEARCH to find nearby drivers
+            const nearbyDrivers = await redisClient.geoSearch(
+                key,
+                {
+                    longitude: pickupLocation.lng,
+                    latitude: pickupLocation.lat,
+                    radius: radius,
+                    unit: 'km'
+                },
+                { SORT: 'ASC' } // Sort by distance (closest first)
+            );
+
+            // Get coordinates for each driver
+            const positions = await redisClient.geoPos(key, nearbyDrivers);
+
+            // Get additional driver info for each nearby driver
+            const driverDetails = [];
+            for (let i = 0; i < nearbyDrivers.length; i++) {
+                const driverId = nearbyDrivers[i];
+                const pos = positions?.[i];
+                const driverStatus = await redisClient.hGetAll(`driver_status:${driverId}`);
+                if (driverStatus.status === 'available' && pos) {
+                    driverDetails.push({
+                        driverId,
+                        ...driverStatus,
+                        coordinates: { lat: parseFloat(pos.latitude), lng: parseFloat(pos.longitude) }
+                    });
+                }
+            }
+
+            console.log(`[signaling-service] Found ${driverDetails.length} nearby drivers for ${vehicleType} in ${city}`);
+            
+            socket.emit('nearbyDriversFound', {
+                success: true,
+                drivers: driverDetails,
+                count: driverDetails.length,
+                searchRadius: radius
+            });
+
+        } catch (error) {
+            console.error('[signaling-service] Error finding nearby drivers:', error);
+            socket.emit('error', { message: 'Failed to find nearby drivers' });
+        }
+    });
+
+    // Handle driver status updates (available, busy, offline)
+    socket.on('driverStatusUpdate', async (data) => {
+        try {
+            const { driverId, status } = data;
+            
+            if (!driverId || !status) {
+                socket.emit('error', { message: 'Missing driver ID or status' });
+                return;
+            }
+
+            // Update driver status
+            await redisClient.hSet(`driver_status:${driverId}`, {
+                status,
+                lastUpdate: new Date().toISOString()
+            });
+            await redisClient.expire(`driver_status:${driverId}`, 60);
+
+            console.log(`[signaling-service] Driver ${driverId} status updated to ${status}`);
+            
+            socket.emit('statusUpdateConfirmed', { success: true });
+
+        } catch (error) {
+            console.error('[signaling-service] Error updating driver status:', error);
+            socket.emit('error', { message: 'Failed to update status' });
+        }
     });
     
     // Handle disconnection
