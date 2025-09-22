@@ -36,14 +36,10 @@ module.exports = {
       env: {
         PORT: process.env.ADMIN_SERVICE_PORT || 3004
       }
-    }, {
-      name   : "signaling-service",
-      script : "./packages/signaling-service/index.js",
-      watch: false,
-      env: {
-        PORT: process.env.SIGNALING_SERVICE_PORT || 3005
-      }
-    }]
+    } ]
   }
+
+
+
   
   

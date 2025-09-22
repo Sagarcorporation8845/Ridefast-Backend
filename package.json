@@ -8,11 +8,12 @@
     "start:driver-service": "cross-env PORT=3002 nodemon packages/driver-service/index.js",
     "start:support-service": "cross-env PORT=3003 nodemon packages/support-service/index.js",
     "start:admin-service": "cross-env PORT=3004 nodemon packages/admin-service/index.js",
-    "start:signaling-service": "cross-env PORT=3005 nodemon packages/signaling-service/index.js",
-    "dev": "concurrently \"npm:start\" \"npm:start:user-service\" \"npm:start:driver-service\" \"npm:start:support-service\" \"npm:start:admin-service\" \"npm:start:signaling-service\"",
-    "validate-swagger": "node scripts/validate-swagger.js",
-    "test-db": "node scripts/test-db-connection-new.js",
-    "docs": "echo 'API Documentation available at http://localhost/api-docs'"
+    "start:location-service": "cross-env PORT=3006 nodemon packages/location-service/index.js",
+    "start:pricing-service": "cross-env PORT=3007 nodemon packages/pricing-service/index.js",
+    "start:ride-service": "cross-env PORT=3008 nodemon packages/ride-service/index.js",
+    "dev": "concurrently \"npm:start\" \"npm:start:user-service\" \"npm:start:driver-service\" \"npm:start:support-service\" \"npm:start:admin-service\" \"npm:start:location-service\" \"npm:start:pricing-service\" \"npm:start:ride-service\""
+
+ 
   },
   "keywords": [],
   "author": "",
@@ -21,7 +22,7 @@
   "dependencies": {
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
-    "express": "^5.1.0",
+    "express": "^4.19.2",
     "http-proxy-middleware": "^3.0.0",
     "pg": "^8.16.3",
     "swagger-jsdoc": "^6.2.8",
