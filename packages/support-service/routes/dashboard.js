@@ -15,20 +15,19 @@ const router = express.Router();
 router.get('/overview', tokenVerify, sanitizeInput, validateQuery('dashboardOverview'), async (req, res) => {
   try {
     const { role, city } = req.user;
-    
-    // Base query conditions based on role
-    const cityCondition = isCityRole(role) ? 
-      `AND d.city = $1` : '';
-    const params = isCityRole(role) ? [city] : [];
 
-    // Get today's metrics
+    // --- FIX: Correctly define conditions and params for all queries ---
+    const cityCondition = isCityRole(role) ? `AND d.city = $1` : '';
+    const ticketCityCondition = isCityRole(role) ? `WHERE city = $1` : '';
+    const ticketCityConditionWithAnd = isCityRole(role) ? `AND city = $1` : '';
+    const params = isCityRole(role) ? [city] : [];
+    
     const today = new Date().toISOString().split('T')[0];
     
     // Total active drivers
     const activeDriversQuery = `
       SELECT COUNT(*) as count 
       FROM drivers d 
-      JOIN users u ON d.user_id = u.id 
       WHERE d.status = 'active' ${cityCondition}
     `;
     
@@ -36,7 +35,7 @@ router.get('/overview', tokenVerify, sanitizeInput, validateQuery('dashboardOver
     const todayRidesQuery = `
       SELECT COUNT(*) as count 
       FROM rides r 
-      JOIN drivers d ON r.driver_id = d.id 
+      LEFT JOIN drivers d ON r.driver_id = d.id 
       WHERE DATE(r.created_at) = $${params.length + 1} ${cityCondition}
     `;
     
@@ -47,28 +46,37 @@ router.get('/overview', tokenVerify, sanitizeInput, validateQuery('dashboardOver
       WHERE d.status = 'pending_verification' ${cityCondition}
     `;
     
-    // Open support tickets
+    // --- MODIFICATION START: Add BOTH open and unassigned tickets ---
+    // All open tickets in the city
     const openTicketsQuery = `
       SELECT COUNT(*) as count 
-      FROM support_tickets st 
-      JOIN users u ON st.created_by_agent_id = u.id 
-      WHERE st.status = 'open'
+      FROM support_tickets 
+      WHERE status = 'open' ${ticketCityConditionWithAnd}
     `;
 
+    // Unassigned tickets in the city
+    const unassignedTicketsQuery = `
+      SELECT COUNT(*) as count 
+      FROM support_tickets
+      WHERE status = 'open' AND assigned_agent_id IS NULL ${ticketCityConditionWithAnd}
+    `;
+    // --- MODIFICATION END ---
+    
     // Revenue today
     const todayRevenueQuery = `
       SELECT COALESCE(SUM(r.fare), 0) as revenue 
       FROM rides r 
-      JOIN drivers d ON r.driver_id = d.id 
+      LEFT JOIN drivers d ON r.driver_id = d.id 
       WHERE DATE(r.created_at) = $${params.length + 1} 
       AND r.status = 'completed' ${cityCondition}
     `;
 
-    // Execute queries sequentially to avoid connection pool exhaustion
+    // Execute all queries
     const activeDrivers = await db.query(activeDriversQuery, params);
     const todayRides = await db.query(todayRidesQuery, [...params, today]);
     const pendingDrivers = await db.query(pendingDriversQuery, params);
-    const openTickets = await db.query(openTicketsQuery, []);
+    const openTickets = await db.query(openTicketsQuery, isCityRole(role) ? [city] : []);
+    const unassignedTickets = await db.query(unassignedTicketsQuery, isCityRole(role) ? [city] : []);
     const todayRevenue = await db.query(todayRevenueQuery, [...params, today]);
 
     // Get recent activities
@@ -99,6 +107,7 @@ router.get('/overview', tokenVerify, sanitizeInput, validateQuery('dashboardOver
           todayRides: parseInt(todayRides.rows[0].count),
           pendingDrivers: parseInt(pendingDrivers.rows[0].count),
           openTickets: parseInt(openTickets.rows[0].count),
+          unassignedTickets: parseInt(unassignedTickets.rows[0].count),
           todayRevenue: parseFloat(todayRevenue.rows[0].revenue)
         },
         recentActivities: recentActivities.rows,
@@ -125,8 +134,7 @@ router.get('/analytics', tokenVerify, sanitizeInput, validateQuery('dashboardAna
     const { role, city } = req.user;
     const { period = '7d' } = req.query;
 
-    const cityCondition = isCityRole(role) ? 
-      `AND d.city = $1` : '';
+    const cityCondition = isCityRole(role) ? `AND d.city = $1` : '';
     const params = isCityRole(role) ? [city] : [];
 
     let dateCondition = '';
@@ -160,7 +168,7 @@ router.get('/analytics', tokenVerify, sanitizeInput, validateQuery('dashboardAna
       GROUP BY r.status
     `;
 
-    // Execute queries sequentially to avoid connection pool exhaustion
+    // Execute queries
     const ridesAnalytics = await db.query(ridesAnalyticsQuery, params);
     const statusDistribution = await db.query(statusDistributionQuery, params);
 

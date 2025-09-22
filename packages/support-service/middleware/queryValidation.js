@@ -1,3 +1,4 @@
+// packages/support-service/middleware/queryValidation.js
 const Joi = require('joi');
 
 // Common validation schemas for query parameters
@@ -108,6 +109,7 @@ const routeSchemas = {
   }),
 
   createTicket: Joi.object({
+    customerId: Joi.string().uuid().required(), // FIX: Added customerId validation
     subject: Joi.string().min(5).max(255).required(),
     description: Joi.string().min(10).max(2000).required(),
     priority: Joi.string().valid('low', 'normal', 'high', 'urgent').default('normal'),
@@ -174,7 +176,6 @@ const validateQuery = (schemaName) => {
       });
     }
 
-    // Replace query with validated and converted values
     req.query = value;
     next();
   };
@@ -210,7 +211,6 @@ const validateBody = (schemaName) => {
       });
     }
 
-    // Replace body with validated and converted values
     req.body = value;
     next();
   };
@@ -218,17 +218,15 @@ const validateBody = (schemaName) => {
 
 // Sanitization middleware for additional security
 const sanitizeInput = (req, res, next) => {
-  // Sanitize string inputs to prevent XSS
   const sanitizeString = (str) => {
     if (typeof str !== 'string') return str;
     return str
-      .replace(/[<>]/g, '') // Remove potential HTML tags
-      .replace(/javascript:/gi, '') // Remove javascript: protocol
-      .replace(/on\w+=/gi, '') // Remove event handlers
+      .replace(/[<>]/g, '')
+      .replace(/javascript:/gi, '')
+      .replace(/on\w+=/gi, '')
       .trim();
   };
 
-  // Recursively sanitize object
   const sanitizeObject = (obj) => {
     if (obj === null || obj === undefined) return obj;
     
@@ -253,7 +251,6 @@ const sanitizeInput = (req, res, next) => {
     return obj;
   };
 
-  // Sanitize query parameters and body
   req.query = sanitizeObject(req.query);
   req.body = sanitizeObject(req.body);
   

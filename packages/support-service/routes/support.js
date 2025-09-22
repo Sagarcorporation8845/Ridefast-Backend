@@ -3,17 +3,18 @@ const express = require('express');
 const db = require('../db');
 const tokenVerify = require('../middleware/token-verify');
 const { validateQuery, validateBody, sanitizeInput } = require('../middleware/queryValidation');
+const TicketAssignmentEngine = require('../services/TicketAssignmentEngine'); // Import the assignment engine
 
 const router = express.Router();
 
 /**
  * @route GET /support/tickets
- * @desc Get support tickets
+ * @desc Get support tickets based on role (agent's tickets or all city tickets for admin)
  * @access Private (City Admin, Support)
  */
 router.get('/tickets', tokenVerify, sanitizeInput, validateQuery('supportTickets'), async (req, res) => {
   try {
-    const { agentId } = req.user;
+    const { agentId, role, city } = req.user; // Get role and city from the token
     const { 
       page = 1, 
       limit = 20, 
@@ -22,9 +23,22 @@ router.get('/tickets', tokenVerify, sanitizeInput, validateQuery('supportTickets
     } = req.query;
 
     const offset = (page - 1) * limit;
-    let whereConditions = ['st.created_by_agent_id = $1'];
-    let params = [agentId];
-    let paramIndex = 2;
+    let whereConditions = [];
+    let params = [];
+    let paramIndex = 1;
+
+    // If the user is a city_admin, show all tickets for their city.
+    // Otherwise (for support agents), show only the tickets they created.
+    if (role === 'city_admin') {
+      whereConditions.push(`st.city = $${paramIndex}`);
+      params.push(city);
+      paramIndex++;
+    } else {
+      whereConditions.push(`st.created_by_agent_id = $${paramIndex}`);
+      params.push(agentId);
+      paramIndex++;
+    }
+
 
     // Status filter
     if (status) {
@@ -42,9 +56,11 @@ router.get('/tickets', tokenVerify, sanitizeInput, validateQuery('supportTickets
         st.subject,
         st.status,
         st.created_at,
-        u.full_name as created_by_name
+        u.full_name as customer_name,
+        creator.full_name as created_by_name
       FROM support_tickets st
-      JOIN users u ON st.created_by_agent_id = u.id
+      JOIN users u ON st.customer_id = u.id
+      JOIN platform_staff creator ON st.created_by_agent_id = creator.id
       ${whereClause}
       ORDER BY st.created_at DESC
       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
@@ -57,7 +73,7 @@ router.get('/tickets', tokenVerify, sanitizeInput, validateQuery('supportTickets
       ${whereClause}
     `;
 
-    // Execute queries sequentially to avoid connection pool exhaustion
+    // Execute queries
     const ticketsResult = await db.query(ticketsQuery, [...params, limit, offset]);
     const countResult = await db.query(countQuery, params);
 
@@ -93,28 +109,36 @@ router.get('/tickets', tokenVerify, sanitizeInput, validateQuery('supportTickets
  */
 router.post('/tickets', tokenVerify, sanitizeInput, validateBody('createTicket'), async (req, res) => {
   try {
-    const { agentId } = req.user;
-    const { subject, description, priority = 'medium', category } = req.body;
+    const { agentId, city } = req.user;
+    const { customerId, subject, description, priority = 'normal', category } = req.body;
 
-    if (!subject || !description) {
-      return res.status(400).json({
-        success: false,
-        message: 'Subject and description are required'
-      });
+    // Verify customer exists
+    const customerResult = await db.query('SELECT id FROM users WHERE id = $1', [customerId]);
+    if (customerResult.rows.length === 0) {
+        return res.status(404).json({
+            success: false,
+            message: 'Customer with the provided customerId not found'
+        });
     }
-
+    
     // Create support ticket
     const ticketResult = await db.query(
-      `INSERT INTO support_tickets (created_by_agent_id, subject, status)
-       VALUES ($1, $2, 'open')
-       RETURNING id, subject, status, created_at`,
-      [agentId, subject]
+      `INSERT INTO support_tickets (customer_id, city, subject, description, priority, type, created_by_agent_id, status)
+       VALUES ($1, $2, $3, $4, $5, 'text', $6, 'open')
+       RETURNING *`,
+      [customerId, city, subject, description, priority, agentId]
     );
+
+    const newTicket = ticketResult.rows[0];
+
+    // Attempt to auto-assign the newly created ticket
+    const assignmentEngine = new TicketAssignmentEngine();
+    await assignmentEngine.assignTicket(newTicket.id, city);
 
     res.status(201).json({
       success: true,
       message: 'Support ticket created successfully',
-      data: ticketResult.rows[0]
+      data: newTicket
     });
 
   } catch (error) {
@@ -144,7 +168,6 @@ router.put('/tickets/:id/status', tokenVerify, sanitizeInput, validateBody('upda
       });
     }
 
-    // Verify ticket ownership
     const ticketCheck = await db.query(
       'SELECT created_by_agent_id FROM support_tickets WHERE id = $1',
       [id]
@@ -164,7 +187,6 @@ router.put('/tickets/:id/status', tokenVerify, sanitizeInput, validateBody('upda
       });
     }
 
-    // Update ticket status
     await db.query(
       'UPDATE support_tickets SET status = $1 WHERE id = $2',
       [status, id]
@@ -201,7 +223,6 @@ router.get('/quick-actions', tokenVerify, sanitizeInput, async (req, res) => {
       params.push(city);
     }
 
-    // Get pending driver verifications
     const pendingDriversQuery = `
       SELECT 
         d.id,
@@ -219,7 +240,6 @@ router.get('/quick-actions', tokenVerify, sanitizeInput, async (req, res) => {
       LIMIT 10
     `;
 
-    // Get recent cancelled rides
     const cancelledRidesQuery = `
       SELECT 
         r.id,
@@ -238,7 +258,6 @@ router.get('/quick-actions', tokenVerify, sanitizeInput, async (req, res) => {
       LIMIT 5
     `;
 
-    // Get drivers with recent penalties
     const recentPenaltiesQuery = `
       SELECT 
         da.id,
@@ -255,7 +274,6 @@ router.get('/quick-actions', tokenVerify, sanitizeInput, async (req, res) => {
       LIMIT 5
     `;
 
-    // Execute queries sequentially to avoid connection pool exhaustion
     const pendingDrivers = await db.query(pendingDriversQuery, params);
     const cancelledRides = await db.query(cancelledRidesQuery, params);
     const recentPenalties = await db.query(recentPenaltiesQuery, params);
@@ -297,7 +315,6 @@ router.get('/notifications', tokenVerify, sanitizeInput, validateQuery('paginati
       params.push(city);
     }
 
-    // Get system notifications (new drivers, document uploads, etc.)
     const notificationsQuery = `
       SELECT 
         'driver_registration' as type,
@@ -360,7 +377,6 @@ router.post('/broadcast', tokenVerify, sanitizeInput, validateBody('broadcast'),
     const { role, city } = req.user;
     const { message, target_audience, urgency = 'normal' } = req.body;
 
-    // Only city admin can send broadcasts
     if (role !== 'city_admin') {
       return res.status(403).json({
         success: false,
@@ -382,13 +398,9 @@ router.post('/broadcast', tokenVerify, sanitizeInput, validateBody('broadcast'),
       });
     }
 
-    // Log the broadcast (in a real system, this would trigger push notifications)
     console.log(`Broadcast message from ${role} in ${city}:`);
     console.log(`Target: ${target_audience}, Urgency: ${urgency}`);
     console.log(`Message: ${message}`);
-
-    // Here you would integrate with your push notification service
-    // For now, we'll just return success
 
     res.json({
       success: true,
