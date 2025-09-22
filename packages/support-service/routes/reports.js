@@ -201,18 +201,27 @@ router.get('/financial', tokenVerify, sanitizeInput, validateQuery('financialRep
       });
     }
 
-    let dateCondition = '';
     let params = [];
     let paramIndex = 1;
 
+    let rideDateCondition = '';
+    let ledgerDateCondition = '';
+    let transactionDateCondition = '';
+
     if (start_date && end_date) {
-      dateCondition = `AND DATE(r.created_at) BETWEEN $${paramIndex} AND $${paramIndex + 1}`;
+      rideDateCondition = `AND DATE(r.created_at) BETWEEN $${paramIndex} AND $${paramIndex + 1}`;
+      ledgerDateCondition = `AND DATE(dl.created_at) BETWEEN $${paramIndex} AND $${paramIndex + 1}`;
+      transactionDateCondition = `AND DATE(t.created_at) BETWEEN $${paramIndex} AND $${paramIndex + 1}`;
       params.push(start_date, end_date);
       paramIndex += 2;
     } else if (period === 'monthly') {
-      dateCondition = `AND r.created_at >= DATE_TRUNC('month', CURRENT_DATE)`;
+      rideDateCondition = `AND r.created_at >= DATE_TRUNC('month', CURRENT_DATE)`;
+      ledgerDateCondition = `AND dl.created_at >= DATE_TRUNC('month', CURRENT_DATE)`;
+      transactionDateCondition = `AND t.created_at >= DATE_TRUNC('month', CURRENT_DATE)`;
     } else if (period === 'weekly') {
-      dateCondition = `AND r.created_at >= DATE_TRUNC('week', CURRENT_DATE)`;
+      rideDateCondition = `AND r.created_at >= DATE_TRUNC('week', CURRENT_DATE)`;
+      ledgerDateCondition = `AND dl.created_at >= DATE_TRUNC('week', CURRENT_DATE)`;
+      transactionDateCondition = `AND t.created_at >= DATE_TRUNC('week', CURRENT_DATE)`;
     }
 
     const cityCondition = `AND d.city = $${paramIndex}`;
@@ -226,7 +235,7 @@ router.get('/financial', tokenVerify, sanitizeInput, validateQuery('financialRep
         COALESCE(AVG(CASE WHEN r.status = 'completed' THEN r.fare END), 0) as avg_ride_value
       FROM rides r
       JOIN drivers d ON r.driver_id = d.id
-      WHERE 1=1 ${dateCondition} ${cityCondition}
+      WHERE 1=1 ${rideDateCondition} ${cityCondition}
     `;
 
     // Driver earnings and platform fees
@@ -237,7 +246,7 @@ router.get('/financial', tokenVerify, sanitizeInput, validateQuery('financialRep
         SUM(CASE WHEN dl.type = 'fine' THEN ABS(dl.amount) END) as fines_collected
       FROM driver_ledger dl
       JOIN drivers d ON dl.driver_id = d.id
-      WHERE 1=1 ${dateCondition} ${cityCondition}
+      WHERE 1=1 ${ledgerDateCondition} ${cityCondition}
     `;
 
     // Transaction summary
@@ -250,7 +259,7 @@ router.get('/financial', tokenVerify, sanitizeInput, validateQuery('financialRep
       JOIN wallets w ON t.wallet_id = w.id
       JOIN users u ON w.user_id = u.id
       LEFT JOIN drivers d ON u.id = d.user_id
-      WHERE 1=1 ${dateCondition} ${cityCondition}
+      WHERE 1=1 ${transactionDateCondition} ${cityCondition}
     `;
 
     // Execute queries sequentially to avoid connection pool exhaustion

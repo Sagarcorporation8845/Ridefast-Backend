@@ -17,6 +17,6 @@ module.exports = function(req, res, next) {
     req.user = decoded; // Add user payload to the request object for consistency
     next();
   } catch (err) {
-    res.status(401).json({ message: 'Token is not valid.' });
+    res.status(401).json({ message: 'Token is not valid or expired.' });
   }
 };
