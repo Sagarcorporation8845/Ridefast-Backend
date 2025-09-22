@@ -16,7 +16,8 @@ const USER_SERVICE_URL = 'http://localhost:3001';
 const DRIVER_SERVICE_URL = 'http://localhost:3002';
 const SUPPORT_SERVICE_URL = 'http://localhost:3003';
 const ADMIN_SERVICE_URL = 'http://localhost:3004';
-const SIGNALING_SERVICE_URL = 'http://localhost:3005';
+const VERIFICATION_SERVICE_URL = 'http://localhost:3005'; // Add this line
+
 
 // --- Middleware ---
 app.use(cors());
@@ -50,7 +51,7 @@ app.get('/', (req, res) => {
             'driver-service': '/driver-service', 
             'support-service': '/support-service',
             'admin-service': '/admin-service',
-            'signaling-service': '/signaling-service'
+            'verification-service': '/verification-service'
         },
         timestamp: new Date().toISOString()
     });
@@ -95,12 +96,11 @@ app.use('/admin-service', createProxyMiddleware({
 }));
 
 // Proxy requests for the Signaling Service (WebSocket)
-app.use('/signaling-service', createProxyMiddleware({
-    target: SIGNALING_SERVICE_URL,
+app.use('/verification-service', createProxyMiddleware({
+    target: VERIFICATION_SERVICE_URL,
     changeOrigin: true,
-    ws: true, // Enable WebSocket proxying
     pathRewrite: {
-        '^/signaling-service': '', // remove the prefix
+        '^/verification-service': '', // remove the prefix
     },
 }));
 

@@ -60,7 +60,7 @@ jobs:
             
             # Install/update dependencies for the signaling-service
             echo "Installing signaling-service dependencies..."
-            cd ../signaling-service
+            cd ../verification-service
             npm install
             
             # Go back to the root project directory

@@ -36,6 +36,13 @@ module.exports = {
       env: {
         PORT: process.env.ADMIN_SERVICE_PORT || 3004
       }
+    }, {
+      name   : "verification-service",
+      script : "./packages/verification-service/index.js",
+      watch: false,
+      env: {
+        PORT: process.env.VERIFICATION_SERVICE_PORT || 3005
+      }
     } ]
   }
 
