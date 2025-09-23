@@ -45,6 +45,8 @@ app.get('/health', (req, res) => {
 // Routes
 app.use('/admin/agents', require('./routes/agents'));
 app.use('/admin/tickets', require('./routes/tickets'));
+app.use('/admin/cities', require('./routes/cities')); // Add this line
+
 
 // 404 handler
 app.use('*', (req, res) => {

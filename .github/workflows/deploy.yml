@@ -58,8 +58,8 @@ jobs:
             cd ../admin-service
             npm install
             
-            # Install/update dependencies for the signaling-service
-            echo "Installing signaling-service dependencies..."
+            # Install/update dependencies for the verification-service
+            echo "Installing verification-service dependencies..."
             cd ../verification-service
             npm install
             

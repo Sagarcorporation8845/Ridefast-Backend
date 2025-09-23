@@ -42,7 +42,7 @@ router.post('/login', async (req, res) => {
 
     // Create the JWT payload with all necessary authorization info
     const payload = {
-      agentId: staffMember.id,
+      userId: staffMember.id,
       role: staffMember.role,
       city: staffMember.role === 'central_admin' ? 'Central' : staffMember.city
     };

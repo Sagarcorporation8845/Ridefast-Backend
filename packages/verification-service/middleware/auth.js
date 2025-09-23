@@ -14,7 +14,7 @@ const authenticateAgent = async (req, res, next) => {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         const result = await query(
             'SELECT id, role, city, status FROM platform_staff WHERE id = $1',
-            [decoded.agentId]
+            [decoded.userId]
         );
 
         if (result.rows.length === 0 || result.rows[0].status !== 'active') {

@@ -8,20 +8,53 @@ const path = require('path');
 
 const router = express.Router();
 
-// --- Personal Details Endpoint (No changes) ---
+// --- NEW PUBLIC ENDPOINT: Get Active Cities ---
+router.get('/cities', async (req, res) => {
+    try {
+        const { rows } = await db.query(
+            "SELECT city_name FROM servicable_cities WHERE status = 'active' ORDER BY city_name"
+        );
+        res.status(200).json({ success: true, cities: rows.map(c => c.city_name) });
+    } catch (error) {
+        console.error('Error fetching serviceable cities:', error);
+        res.status(500).json({ success: false, message: 'Could not retrieve city list.' });
+    }
+});
+
+
+// --- Personal Details Endpoint (With Full Name & City Validation) ---
 router.post('/personal-details', tokenVerify, async (req, res) => {
-    const { fullName, city } = req.body;
+    let { fullName, city } = req.body;
     const userId = req.user.userId;
 
     if (!fullName || !city) {
         return res.status(400).json({ message: 'Full name and city are required.' });
     }
 
+    // Validate full name to prevent special characters
+    const nameRegex = /^[a-zA-Z\s]+$/;
+    if (!nameRegex.test(fullName)) {
+        return res.status(400).json({ message: 'Full name can only contain letters and spaces.' });
+    }
+    fullName = fullName.trim();
+    
+    // Standardize and validate the city
+    const standardizedCity = city.trim().toLowerCase();
+
     try {
+        const cityCheck = await db.query(
+            "SELECT id FROM servicable_cities WHERE city_name = $1 AND status = 'active'",
+            [standardizedCity]
+        );
+
+        if (cityCheck.rows.length === 0) {
+            return res.status(400).json({ message: 'Sorry, we do not currently operate in this city.' });
+        }
+
         await db.query('UPDATE users SET full_name = $1 WHERE id = $2', [fullName, userId]);
         const { rows } = await db.query(
             'INSERT INTO drivers (user_id, city) VALUES ($1, $2) RETURNING id',
-            [userId, city]
+            [userId, standardizedCity] // Use the standardized city name
         );
         
         const driverId = rows[0].id;
@@ -47,7 +80,7 @@ router.post('/personal-details', tokenVerify, async (req, res) => {
 });
 
 
-// --- SECURED Vehicle Details Endpoint (No changes) ---
+// --- SECURED Vehicle Details Endpoint (With Registration Number Standardization) ---
 router.post('/vehicle-details', tokenVerify, async (req, res) => {
     const { vehicleType, registrationNumber, modelName, fuelType } = req.body;
     const userId = req.user.userId; 
@@ -64,6 +97,9 @@ router.post('/vehicle-details', tokenVerify, async (req, res) => {
     if (!allowedFuelTypes.includes(fuelType.toLowerCase())) {
         return res.status(400).json({ message: `Invalid fuel type.` });
     }
+
+    // Standardize the registration number
+    const standardizedRegNumber = registrationNumber.replace(/[\s-]/g, '').toUpperCase();
     
     try {
         const driverResult = await db.query('SELECT id FROM drivers WHERE user_id = $1', [userId]);
@@ -74,12 +110,13 @@ router.post('/vehicle-details', tokenVerify, async (req, res) => {
 
         await db.query(
             'INSERT INTO driver_vehicles (driver_id, category, registration_number, model_name, fuel_type) VALUES ($1, $2, $3, $4, $5)',
-            [driverId, vehicleType.toLowerCase(), registrationNumber, modelName, fuelType.toLowerCase()]
+            [driverId, vehicleType.toLowerCase(), standardizedRegNumber, modelName, fuelType.toLowerCase()]
         );
         res.status(201).json({ message: 'Vehicle details saved. Proceed to document upload.' });
     } catch (err) {
         if (err.code === '23505') { 
-             return res.status(409).json({ message: 'A vehicle with this registration number or for this driver already exists.' });
+             // Clearer conflict message
+             return res.status(409).json({ message: 'A vehicle with this registration number already exists.' });
         }
         console.error('Error saving vehicle details:', err);
         res.status(500).json({ message: 'Internal server error' });
@@ -87,7 +124,7 @@ router.post('/vehicle-details', tokenVerify, async (req, res) => {
 });
 
 
-// --- Multer Configuration for Document Uploads (No changes) ---
+// --- Multer Configuration for Document Uploads (With File Type Validation) ---
 const storage = multer.diskStorage({
     destination: async function (req, file, cb) {
         const userId = req.user.userId; 
@@ -97,9 +134,8 @@ const storage = multer.diskStorage({
                  return cb(new Error('No driver profile found for this user.'), null);
             }
             const driverId = driverResult.rows[0].id;
-            const dir = path.join(__dirname, '..', 'uploads', driverId);
+            const dir = path.join(__dirname, '..', 'uploads', driverId.toString());
             
-            // Attach driverId to request object to use later
             req.driverId = driverId;
 
             fs.mkdir(dir, { recursive: true }, err => {
@@ -116,35 +152,62 @@ const storage = multer.diskStorage({
     }
 });
 
-const upload = multer({ storage: storage });
+// Add a file filter to multer
+const fileFilter = (req, file, cb) => {
+    const allowedTypes = /jpeg|jpg|png|pdf/;
+    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+    const mimetype = allowedTypes.test(file.mimetype);
+
+    if (mimetype && extname) {
+        return cb(null, true);
+    } else {
+        cb(new Error('Invalid file type. Only PDF, JPG, and PNG are allowed.'), false);
+    }
+};
+
+const upload = multer({ 
+    storage: storage,
+    fileFilter: fileFilter,
+    limits: { fileSize: 1024 * 1024 * 5 } // 5MB file size limit
+});
 
 
 // --- UPDATED SECURED Document Upload Endpoint ---
-router.post('/upload-document', tokenVerify, upload.single('document'), async (req, res) => {
+router.post('/upload-document', tokenVerify, (req, res) => {
+    const singleUpload = upload.single('document');
+
+    singleUpload(req, res, function (err) {
+        if (err instanceof multer.MulterError) {
+            return res.status(400).json({ message: `File upload error: ${err.message}` });
+        } else if (err) {
+            return res.status(400).json({ message: err.message });
+        }
+        _handleDocumentUpload(req, res);
+    });
+});
+
+async function _handleDocumentUpload(req, res) {
     const { documentType } = req.body;
     const driverId = req.driverId; 
     
     if (!req.file) {
-        return res.status(400).json({ message: 'No file uploaded.' });
+        return res.status(400).json({ message: 'No file was uploaded.' });
     }
     if (!documentType) {
-        fs.unlinkSync(req.file.path); // Clean up the uploaded file
+        fs.unlinkSync(req.file.path);
         return res.status(400).json({ message: 'documentType is required.' });
     }
 
     const fileUrl = `/uploads/${driverId}/${req.file.filename}`;
 
     try {
-        // Step 1: Check if a document of this type already exists for the driver
         const existingDoc = await db.query(
             'SELECT id, file_url FROM driver_documents WHERE driver_id = $1 AND document_type = $2',
             [driverId, documentType.toLowerCase()]
         );
 
         if (existingDoc.rows.length > 0) {
-            // Step 2: UPDATE if it exists (it's a re-upload)
             const oldFileUrl = existingDoc.rows[0].file_url;
-
             await db.query(
                 `UPDATE driver_documents 
                  SET file_url = $1, status = 'pending', rejection_reason = NULL, uploaded_at = NOW()
@@ -152,7 +215,6 @@ router.post('/upload-document', tokenVerify, upload.single('document'), async (r
                 [fileUrl, existingDoc.rows[0].id]
             );
 
-            // Optional: Delete the old file from storage to save space
             if (oldFileUrl) {
                 const oldFilePath = path.join(__dirname, '..', oldFileUrl);
                 fs.unlink(oldFilePath, (err) => {
@@ -165,7 +227,6 @@ router.post('/upload-document', tokenVerify, upload.single('document'), async (r
             });
 
         } else {
-            // Step 3: INSERT if it does not exist (it's a new upload)
             await db.query(
                 'INSERT INTO driver_documents (driver_id, document_type, file_url, status) VALUES ($1, $2, $3, $4)',
                 [driverId, documentType.toLowerCase(), fileUrl, 'pending']
@@ -177,19 +238,17 @@ router.post('/upload-document', tokenVerify, upload.single('document'), async (r
         }
 
     } catch (err) {
-        // If anything goes wrong, delete the newly uploaded file before sending an error
         fs.unlinkSync(req.file.path); 
         console.error('Error saving document:', err);
         res.status(500).json({ message: 'Internal server error' });
     }
-});
+}
 
 
-// --- UPDATED Verification Status Endpoint ---
+// --- Verification Status Endpoint ---
 router.get('/status', tokenVerify, async (req, res) => {
     const userId = req.user.userId;
     try {
-        // First, get the driver's ID and overall verification status
         const driverResult = await db.query(
             'SELECT id, is_verified FROM drivers WHERE user_id = $1',
             [userId]
@@ -201,12 +260,10 @@ router.get('/status', tokenVerify, async (req, res) => {
 
         const driver = driverResult.rows[0];
 
-        // If the driver is already verified, no need to check documents
         if (driver.is_verified) {
             return res.status(200).json({ isVerified: true });
         }
 
-        // If not verified, check for rejected documents
         const rejectedDocsResult = await db.query(
             `SELECT document_type, rejection_reason 
              FROM driver_documents 
@@ -215,7 +272,6 @@ router.get('/status', tokenVerify, async (req, res) => {
         );
 
         if (rejectedDocsResult.rows.length > 0) {
-            // If there are rejected documents, return the details
             return res.status(200).json({
                 isVerified: false,
                 status: 'rejected',
@@ -225,7 +281,6 @@ router.get('/status', tokenVerify, async (req, res) => {
                 }))
             });
         } else {
-            // If no documents are rejected, the status is pending
             return res.status(200).json({
                 isVerified: false,
                 status: 'pending'

@@ -22,7 +22,7 @@ const authenticateAgent = async (req, res, next) => {
         // Fetch agent details from database
         const result = await query(
             'SELECT id, full_name, email, role, city, status FROM platform_staff WHERE id = $1',
-            [decoded.agentId]
+            [decoded.userId]
         );
 
         if (result.rows.length === 0) {
