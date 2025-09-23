@@ -9,109 +9,90 @@ const router = express.Router();
 
 /**
  * @route GET /dashboard/overview
- * @desc Get dashboard overview metrics for city admin/support
+ * @desc Get dashboard overview metrics tailored to the user's role.
  * @access Private (City Admin, Support)
  */
 router.get('/overview', tokenVerify, sanitizeInput, validateQuery('dashboardOverview'), async (req, res) => {
   try {
-    const { role, city } = req.user;
-
-    // --- FIX: Correctly define conditions and params for all queries ---
-    const cityCondition = isCityRole(role) ? `AND d.city = $1` : '';
-    const ticketCityCondition = isCityRole(role) ? `WHERE city = $1` : '';
-    const ticketCityConditionWithAnd = isCityRole(role) ? `AND city = $1` : '';
-    const params = isCityRole(role) ? [city] : [];
-    
+    const { userId, role, city } = req.user; // Use userId, which is the standardized agent ID
     const today = new Date().toISOString().split('T')[0];
-    
-    // Total active drivers
-    const activeDriversQuery = `
-      SELECT COUNT(*) as count 
-      FROM drivers d 
-      WHERE d.status = 'active' ${cityCondition}
-    `;
-    
-    // Today's rides
-    const todayRidesQuery = `
-      SELECT COUNT(*) as count 
-      FROM rides r 
-      LEFT JOIN drivers d ON r.driver_id = d.id 
-      WHERE DATE(r.created_at) = $${params.length + 1} ${cityCondition}
-    `;
-    
-    // Pending driver verifications
-    const pendingDriversQuery = `
-      SELECT COUNT(*) as count 
-      FROM drivers d 
-      WHERE d.status = 'pending_verification' ${cityCondition}
-    `;
-    
-    // --- MODIFICATION START: Add BOTH open and unassigned tickets ---
-    // All open tickets in the city
-    const openTicketsQuery = `
-      SELECT COUNT(*) as count 
-      FROM support_tickets 
-      WHERE status = 'open' ${ticketCityConditionWithAnd}
-    `;
+    let metrics = {};
 
-    // Unassigned tickets in the city
-    const unassignedTicketsQuery = `
-      SELECT COUNT(*) as count 
-      FROM support_tickets
-      WHERE status = 'open' AND assigned_agent_id IS NULL ${ticketCityConditionWithAnd}
-    `;
-    // --- MODIFICATION END ---
-    
-    // Revenue today
-    const todayRevenueQuery = `
-      SELECT COALESCE(SUM(r.fare), 0) as revenue 
-      FROM rides r 
-      LEFT JOIN drivers d ON r.driver_id = d.id 
-      WHERE DATE(r.created_at) = $${params.length + 1} 
-      AND r.status = 'completed' ${cityCondition}
-    `;
+    // --- DASHBOARD FOR CITY ADMIN ---
+    if (role === 'city_admin') {
+      const adminQueries = {
+        activeDrivers: `SELECT COUNT(*) as count FROM drivers WHERE status = 'active' AND LOWER(city) = LOWER($1)`,
+        todayCompletedRides: `
+          SELECT COUNT(*) as count 
+          FROM rides r
+          JOIN drivers d ON r.driver_id = d.id
+          WHERE r.status = 'completed' AND LOWER(d.city) = LOWER($1) AND DATE(r.created_at) = $2`,
+        unassignedTickets: `SELECT COUNT(*) as count FROM support_tickets WHERE status = 'open' AND assigned_agent_id IS NULL AND LOWER(city) = LOWER($1)`,
+        pendingDrivers: `SELECT COUNT(*) as count FROM drivers WHERE status = 'pending_verification' AND LOWER(city) = LOWER($1)`,
+        todayResolvedTickets: `SELECT COUNT(*) as count FROM support_tickets WHERE status = 'resolved' AND LOWER(city) = LOWER($1) AND DATE(resolved_at) = $2`,
+        todayNewTickets: `SELECT COUNT(*) as count FROM support_tickets WHERE LOWER(city) = LOWER($1) AND DATE(created_at) = $2`,
+      };
 
-    // Execute all queries
-    const activeDrivers = await db.query(activeDriversQuery, params);
-    const todayRides = await db.query(todayRidesQuery, [...params, today]);
-    const pendingDrivers = await db.query(pendingDriversQuery, params);
-    const openTickets = await db.query(openTicketsQuery, isCityRole(role) ? [city] : []);
-    const unassignedTickets = await db.query(unassignedTicketsQuery, isCityRole(role) ? [city] : []);
-    const todayRevenue = await db.query(todayRevenueQuery, [...params, today]);
+      const [
+        activeDriversRes,
+        todayRidesRes,
+        unassignedTicketsRes,
+        pendingDriversRes,
+        todayResolvedRes,
+        todayNewTicketsRes
+      ] = await Promise.all([
+        db.query(adminQueries.activeDrivers, [city]),
+        db.query(adminQueries.todayCompletedRides, [city, today]),
+        db.query(adminQueries.unassignedTickets, [city]),
+        db.query(adminQueries.pendingDrivers, [city]),
+        db.query(adminQueries.todayResolvedTickets, [city, today]),
+        db.query(adminQueries.todayNewTickets, [city, today])
+      ]);
 
-    // Get recent activities
-    const recentActivitiesQuery = `
-      SELECT 
-        'ride' as type,
-        r.id,
-        r.status,
-        r.created_at,
-        u.full_name as customer_name,
-        du.full_name as driver_name
-      FROM rides r
-      JOIN users u ON r.customer_id = u.id
-      LEFT JOIN drivers d ON r.driver_id = d.id
-      LEFT JOIN users du ON d.user_id = du.id
-      WHERE DATE(r.created_at) = $${params.length + 1} ${cityCondition}
-      ORDER BY r.created_at DESC
-      LIMIT 10
-    `;
+      metrics = {
+        activeDrivers: parseInt(activeDriversRes.rows[0].count, 10),
+        todayCompletedRides: parseInt(todayRidesRes.rows[0].count, 10),
+        unassignedTickets: parseInt(unassignedTicketsRes.rows[0].count, 10),
+        pendingDrivers: parseInt(pendingDriversRes.rows[0].count, 10),
+        todayResolvedTickets: parseInt(todayResolvedRes.rows[0].count, 10),
+        todayNewTickets: parseInt(todayNewTicketsRes.rows[0].count, 10),
+      };
 
-    const recentActivities = await db.query(recentActivitiesQuery, [...params, today]);
+    // --- DASHBOARD FOR SUPPORT AGENT ---
+    } else if (role === 'support') {
+      const supportQueries = {
+        pendingDrivers: `SELECT COUNT(*) as count FROM drivers WHERE status = 'pending_verification' AND LOWER(city) = LOWER($1)`,
+        openTicketsInCity: `SELECT COUNT(*) as count FROM support_tickets WHERE status = 'open' AND LOWER(city) = LOWER($1)`,
+        unassignedTicketsInCity: `SELECT COUNT(*) as count FROM support_tickets WHERE status = 'open' AND assigned_agent_id IS NULL AND LOWER(city) = LOWER($1)`,
+        myResolvedTickets: `SELECT COUNT(*) as count FROM support_tickets WHERE resolved_at IS NOT NULL AND assigned_agent_id = $1` // Total resolved by this specific agent
+      };
+
+      const [
+        pendingDriversRes,
+        openTicketsRes,
+        unassignedTicketsRes,
+        myResolvedRes
+      ] = await Promise.all([
+        db.query(supportQueries.pendingDrivers, [city]),
+        db.query(supportQueries.openTicketsInCity, [city]),
+        db.query(supportQueries.unassignedTicketsInCity, [city]),
+        db.query(supportQueries.myResolvedTickets, [userId])
+      ]);
+      
+      metrics = {
+        pendingDriverVerifications: parseInt(pendingDriversRes.rows[0].count, 10),
+        openTicketsInCity: parseInt(openTicketsRes.rows[0].count, 10),
+        unassignedTicketsInCity: parseInt(unassignedTicketsRes.rows[0].count, 10),
+        myTotalResolvedTickets: parseInt(myResolvedRes.rows[0].count, 10),
+      };
+    }
 
     res.json({
       success: true,
       data: {
-        metrics: {
-          activeDrivers: parseInt(activeDrivers.rows[0].count),
-          todayRides: parseInt(todayRides.rows[0].count),
-          pendingDrivers: parseInt(pendingDrivers.rows[0].count),
-          openTickets: parseInt(openTickets.rows[0].count),
-          unassignedTickets: parseInt(unassignedTickets.rows[0].count),
-          todayRevenue: parseFloat(todayRevenue.rows[0].revenue)
-        },
-        recentActivities: recentActivities.rows,
-        city: isCityRole(role) ? city : 'All Cities'
+        role: role,
+        city: city,
+        metrics: metrics,
       }
     });
 
