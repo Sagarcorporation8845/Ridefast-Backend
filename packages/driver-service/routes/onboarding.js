@@ -8,8 +8,8 @@ const path = require('path');
 
 const router = express.Router();
 
-// --- NEW PUBLIC ENDPOINT: Get Active Cities ---
-router.get('/cities', async (req, res) => {
+// --- SECURED ENDPOINT: Get Active Cities (FIX APPLIED) ---
+router.get('/cities', tokenVerify, async (req, res) => {
     try {
         const { rows } = await db.query(
             "SELECT city_name FROM servicable_cities WHERE status = 'active' ORDER BY city_name"
@@ -31,14 +31,12 @@ router.post('/personal-details', tokenVerify, async (req, res) => {
         return res.status(400).json({ message: 'Full name and city are required.' });
     }
 
-    // Validate full name to prevent special characters
     const nameRegex = /^[a-zA-Z\s]+$/;
     if (!nameRegex.test(fullName)) {
         return res.status(400).json({ message: 'Full name can only contain letters and spaces.' });
     }
     fullName = fullName.trim();
     
-    // Standardize and validate the city
     const standardizedCity = city.trim().toLowerCase();
 
     try {
@@ -54,7 +52,7 @@ router.post('/personal-details', tokenVerify, async (req, res) => {
         await db.query('UPDATE users SET full_name = $1 WHERE id = $2', [fullName, userId]);
         const { rows } = await db.query(
             'INSERT INTO drivers (user_id, city) VALUES ($1, $2) RETURNING id',
-            [userId, standardizedCity] // Use the standardized city name
+            [userId, standardizedCity]
         );
         
         const driverId = rows[0].id;
@@ -98,7 +96,6 @@ router.post('/vehicle-details', tokenVerify, async (req, res) => {
         return res.status(400).json({ message: `Invalid fuel type.` });
     }
 
-    // Standardize the registration number
     const standardizedRegNumber = registrationNumber.replace(/[\s-]/g, '').toUpperCase();
     
     try {
@@ -115,7 +112,6 @@ router.post('/vehicle-details', tokenVerify, async (req, res) => {
         res.status(201).json({ message: 'Vehicle details saved. Proceed to document upload.' });
     } catch (err) {
         if (err.code === '23505') { 
-             // Clearer conflict message
              return res.status(409).json({ message: 'A vehicle with this registration number already exists.' });
         }
         console.error('Error saving vehicle details:', err);
@@ -152,7 +148,6 @@ const storage = multer.diskStorage({
     }
 });
 
-// Add a file filter to multer
 const fileFilter = (req, file, cb) => {
     const allowedTypes = /jpeg|jpg|png|pdf/;
     const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());

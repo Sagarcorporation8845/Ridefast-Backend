@@ -1,0 +1,1946 @@
+{
+	"info": {
+		"_postman_id": "d9f42536-325e-4b19-94b6-ece5548634b8",
+		"name": "RideFast API's",
+		"description": "# 📄 Get started here\n\nThis template contains a boilerplate for documentation that you can quickly customize and reuse.\n\n## 🔖 How to use this template\n\n- Replace the content given brackets (()) with your API's details.\n- Tips are formatted in `codespan` - feel free to read and remove them.\n    \n\n---\n\n`Start with a brief overview of what your API offers.`\n\nThe ((product name)) provides many API products, tools, and resources that enable you to ((add product value here)).\n\n`You can also list the APIs you offer, link to the relevant pages, or do both in this section.`\n\n## **Getting started guide**\n\n`List the steps or points required to start using your APIs. Make sure to cover everything required to reach success with your API as quickly as possible.`\n\nTo start using the ((add APIs here)), you need to -\n\n`The points given below are from The Postman API's documentation. You can reference it to write your own getting started guide.`\n\n- You must use a valid API Key to send requests to the API endpoints. You can get your API key from Postman's [integrations dashboard](https://go.postman.co/settings/me/api-keys).\n- The API has [rate and usage limits](https://learning.postman.com/docs/developer/postman-api/postman-api-rate-limits/).\n- The API only responds to HTTPS-secured communications. Any requests sent via HTTP return an HTTP 301 redirect to the corresponding HTTPS resources.\n- The API returns request responses in JSON format. When an API request returns an error, it is sent in the JSON response as an error key.\n    \n\n## Authentication\n\n`Add details on the authorization keys/tokens required, steps that cover how to get them, and the relevant error codes.`\n\nThe ((product name)) API uses ((add your API's authorization type)) for authentication.\n\n`The details given below are from the Postman API's documentation. You can reference it to write your own authentication section.`\n\nPostman uses API keys for authentication. You can generate a Postman API key in the [API keys](https://postman.postman.co/settings/me/api-keys) section of your Postman account settings.\n\nYou must include an API key in each request to the Postman API with the X-Api-Key request header.\n\n### Authentication error response\n\nIf an API key is missing, malformed, or invalid, you will receive an HTTP 401 Unauthorized response code.\n\n## Rate and usage limits\n\n`Use this section to cover your APIs' terms of use. Include API limits, constraints, and relevant error codes, so consumers understand the permitted API usage and practices.`\n\n`The example given below is from The Postman API's documentation. Use it as a reference to write your APIs' terms of use.`\n\nAPI access rate limits apply at a per-API key basis in unit time. The limit is 300 requests per minute. Also, depending on your plan, you may have usage limits. If you exceed either limit, your request will return an HTTP 429 Too Many Requests status code.\n\nEach API response returns the following set of headers to help you identify your use status:\n\n| Header | Description |\n| --- | --- |\n| `X-RateLimit-Limit` | The maximum number of requests that the consumer is permitted to make per minute. |\n| `X-RateLimit-Remaining` | The number of requests remaining in the current rate limit window. |\n| `X-RateLimit-Reset` | The time at which the current rate limit window resets in UTC epoch seconds. |\n\n### 503 response\n\nAn HTTP `503` response from our servers indicates there is an unexpected spike in API access traffic. The server is usually operational within the next five minutes. If the outage persists or you receive any other form of an HTTP `5XX` error, [contact support](https://support.postman.com/hc/en-us/requests/new/).\n\n### **Need some help?**\n\n`Add links that customers can refer to whenever they need help.`\n\nIn case you have questions, go through our tutorials ((link to your video or help documentation here)). Or visit our FAQ page ((link to the relevant page)).\n\nOr you can check out our community forum, there’s a good chance our community has an answer for you. Visit our developer forum ((link to developer forum)) to review topics, ask questions, and learn from others.\n\n`You can also document or add links to libraries, code examples, and other resources needed to make a request.`",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "46158796"
+	},
+	"item": [
+		{
+			"name": "UserService",
+			"item": [
+				{
+					"name": "/auth/login",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n  \"countryCode\": \"+91\",\r\n  \"phoneNumber\": \"9876543211\"\r\n  \r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://api.zenevo.in/user-service/auth/login",
+							"protocol": "http",
+							"host": [
+								"api",
+								"zenevo",
+								"in"
+							],
+							"path": [
+								"user-service",
+								"auth",
+								"login"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "/auth/verify-otp",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n  \"countryCode\": \"+91\",\r\n  \"phoneNumber\": \"9876543211\",\r\n  \"otp\": \"3211\"\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://api.zenevo.in/user-service/auth/verify-otp",
+							"protocol": "http",
+							"host": [
+								"api",
+								"zenevo",
+								"in"
+							],
+							"path": [
+								"user-service",
+								"auth",
+								"verify-otp"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "/profile/",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI0ZmVmOGRjNS01YjA3LTQyZTUtOGI2Ny1lODg3OGQyZjQ2OGYiLCJyb2xlcyI6WyJjdXN0b21lciJdLCJpYXQiOjE3NTgwMTM3OTUsImV4cCI6MTc1ODYxODU5NX0.QNxXjozS0w9y4ZmdQZqgY0JfB_ANj1bnHASqsnV_BgE",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer <4fef8dc5-5b07-42e5-8b67-e8878d2f468f>",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "http://api.zenevo.in/user-service/profile/",
+							"protocol": "http",
+							"host": [
+								"api",
+								"zenevo",
+								"in"
+							],
+							"path": [
+								"user-service",
+								"profile",
+								""
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "/profile/update",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI0ZmVmOGRjNS01YjA3LTQyZTUtOGI2Ny1lODg3OGQyZjQ2OGYiLCJyb2xlcyI6WyJjdXN0b21lciJdLCJpYXQiOjE3NTgwMTM3OTUsImV4cCI6MTc1ODYxODU5NX0.QNxXjozS0w9y4ZmdQZqgY0JfB_ANj1bnHASqsnV_BgE",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PUT",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "     { \"fullName\":\"Zene Innovations\",\r\n       \"email\":\"xyz@zene.in\",\r\n       \"dob\": \"10/10/2002\",\r\n       \"gender\": \"Male\"\r\n        }",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://api.zenevo.in/user-service/profile/update",
+							"protocol": "http",
+							"host": [
+								"api",
+								"zenevo",
+								"in"
+							],
+							"path": [
+								"user-service",
+								"profile",
+								"update"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "/locations/save",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI0ZmVmOGRjNS01YjA3LTQyZTUtOGI2Ny1lODg3OGQyZjQ2OGYiLCJyb2xlcyI6WyJjdXN0b21lciJdLCJpYXQiOjE3NTgwMTM3OTUsImV4cCI6MTc1ODYxODU5NX0.QNxXjozS0w9y4ZmdQZqgY0JfB_ANj1bnHASqsnV_BgE",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PUT",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"type\": \"home\", \"address\": \"123 Main St\", \"latitude\": 34.0522, \"longitude\": -118.2437}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://api.zenevo.in/user-service/locations/save",
+							"protocol": "http",
+							"host": [
+								"api",
+								"zenevo",
+								"in"
+							],
+							"path": [
+								"user-service",
+								"locations",
+								"save"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "DriverService",
+			"item": [
+				{
+					"name": "/onboarding/personal-details",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI0ZmVmOGRjNS01YjA3LTQyZTUtOGI2Ny1lODg3OGQyZjQ2OGYiLCJyb2xlcyI6WyJjdXN0b21lciJdLCJpYXQiOjE3NTgwMTM3OTUsImV4cCI6MTc1ODYxODU5NX0.QNxXjozS0w9y4ZmdQZqgY0JfB_ANj1bnHASqsnV_BgE",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"fullName\": \"John Doe\", \"city\": \"Bengaluru\"}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://api.zenevo.in/driver-service/onboarding/personal-details",
+							"protocol": "http",
+							"host": [
+								"api",
+								"zenevo",
+								"in"
+							],
+							"path": [
+								"driver-service",
+								"onboarding",
+								"personal-details"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "/onboarding/vehicle-details",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI0ZmVmOGRjNS01YjA3LTQyZTUtOGI2Ny1lODg3OGQyZjQ2OGYiLCJyb2xlcyI6WyJjdXN0b21lciJdLCJpYXQiOjE3NTgwMTM3OTUsImV4cCI6MTc1ODYxODU5NX0.QNxXjozS0w9y4ZmdQZqgY0JfB_ANj1bnHASqsnV_BgE",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"vehicleType\": \"car\", \"registrationNumber\": \"KA-01-A-1234\", \"modelName\": \"Maruti Swift\", \"fuelType\": \"petrol\"}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://api.zenevo.in/driver-service/onboarding/vehicle-details",
+							"protocol": "http",
+							"host": [
+								"api",
+								"zenevo",
+								"in"
+							],
+							"path": [
+								"driver-service",
+								"onboarding",
+								"vehicle-details"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "/onboarding/upload-document",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI0ZmVmOGRjNS01YjA3LTQyZTUtOGI2Ny1lODg3OGQyZjQ2OGYiLCJyb2xlcyI6WyJjdXN0b21lciJdLCJpYXQiOjE3NTgwMTM3OTUsImV4cCI6MTc1ODYxODU5NX0.QNxXjozS0w9y4ZmdQZqgY0JfB_ANj1bnHASqsnV_BgE",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "documentType",
+									"value": "license",
+									"contentType": "",
+									"type": "text"
+								},
+								{
+									"key": "document",
+									"contentType": "image/jpeg",
+									"type": "file",
+									"src": "postman-cloud:///1f092e58-af25-49f0-8b4d-ab1cd7132730"
+								}
+							]
+						},
+						"url": {
+							"raw": "http://api.zenevo.in/driver-service/onboarding/upload-document",
+							"protocol": "http",
+							"host": [
+								"api",
+								"zenevo",
+								"in"
+							],
+							"path": [
+								"driver-service",
+								"onboarding",
+								"upload-document"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "/onboarding/status",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI0ZmVmOGRjNS01YjA3LTQyZTUtOGI2Ny1lODg3OGQyZjQ2OGYiLCJyb2xlcyI6WyJjdXN0b21lciJdLCJpYXQiOjE3NTgwMTM3OTUsImV4cCI6MTc1ODYxODU5NX0.QNxXjozS0w9y4ZmdQZqgY0JfB_ANj1bnHASqsnV_BgE",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://api.zenevo.in/driver-service/onboarding/status",
+							"protocol": "http",
+							"host": [
+								"api",
+								"zenevo",
+								"in"
+							],
+							"path": [
+								"driver-service",
+								"onboarding",
+								"status"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "/profile",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI0ZmVmOGRjNS01YjA3LTQyZTUtOGI2Ny1lODg3OGQyZjQ2OGYiLCJyb2xlcyI6WyJjdXN0b21lciJdLCJpYXQiOjE3NTgwMTM3OTUsImV4cCI6MTc1ODYxODU5NX0.QNxXjozS0w9y4ZmdQZqgY0JfB_ANj1bnHASqsnV_BgE",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://api.zenevo.in/driver-service/profile",
+							"protocol": "http",
+							"host": [
+								"api",
+								"zenevo",
+								"in"
+							],
+							"path": [
+								"driver-service",
+								"profile"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "/onboarding/cities",
+					"request": {
+						"method": "GET",
+						"header": []
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "SupportService",
+			"item": [
+				{
+					"name": "UserManagement",
+					"item": [
+						{
+							"name": "/auth/login",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\r\n  \"email\": \"sagarbhong@zenevo.in\",\r\n  \"password\": \"Zenevo@123\"\r\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "http://api.zenevo.in/support-service/auth/login",
+									"protocol": "http",
+									"host": [
+										"api",
+										"zenevo",
+										"in"
+									],
+									"path": [
+										"support-service",
+										"auth",
+										"login"
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "/users",
+							"request": {
+								"auth": {
+									"type": "bearer",
+									"bearer": [
+										{
+											"key": "token",
+											"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI0ZmVmOGRjNS01YjA3LTQyZTUtOGI2Ny1lODg3OGQyZjQ2OGYiLCJyb2xlcyI6WyJjdXN0b21lciJdLCJpYXQiOjE3NTgwMTM3OTUsImV4cCI6MTc1ODYxODU5NX0.QNxXjozS0w9y4ZmdQZqgY0JfB_ANj1bnHASqsnV_BgE",
+											"type": "string"
+										}
+									]
+								},
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "http://api.zenevo.in/support-service/users",
+									"protocol": "http",
+									"host": [
+										"api",
+										"zenevo",
+										"in"
+									],
+									"path": [
+										"support-service",
+										"users"
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "/users/{id}",
+							"request": {
+								"auth": {
+									"type": "bearer",
+									"bearer": [
+										{
+											"key": "token",
+											"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI0ZmVmOGRjNS01YjA3LTQyZTUtOGI2Ny1lODg3OGQyZjQ2OGYiLCJyb2xlcyI6WyJjdXN0b21lciJdLCJpYXQiOjE3NTgwMTM3OTUsImV4cCI6MTc1ODYxODU5NX0.QNxXjozS0w9y4ZmdQZqgY0JfB_ANj1bnHASqsnV_BgE",
+											"type": "string"
+										}
+									]
+								},
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "http://api.zenevo.in/support-service/users/0e60fcba-d990-4e04-8e86-b0b8511d1234",
+									"protocol": "http",
+									"host": [
+										"api",
+										"zenevo",
+										"in"
+									],
+									"path": [
+										"support-service",
+										"users",
+										"0e60fcba-d990-4e04-8e86-b0b8511d1234"
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "/users/{id}/wallet",
+							"request": {
+								"auth": {
+									"type": "bearer",
+									"bearer": [
+										{
+											"key": "token",
+											"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhZ2VudElkIjoiZjI0YmRkZDEtNzJkMC00MDNiLTg1MDctM2I3NThmNmFmOTM4Iiwicm9sZSI6ImNpdHlfYWRtaW4iLCJjaXR5IjoiUHVuZSIsImlhdCI6MTc1ODA5ODY1MSwiZXhwIjoxNzU4MTI3NDUxfQ.iK8PuD-AC5_12mdDsFZ2qrVXSn5M_dvX-mMo4M-My6Q",
+											"type": "string"
+										}
+									]
+								},
+								"method": "PUT",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{ \"amount\":1000, \"type\":\"refund\", \r\n   \"reason\":\"bad quality\" }",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "http://api.zenevo.in/support-service/users/0e60fcba-d990-4e04-8e86-b0b8511d1234/wallet",
+									"protocol": "http",
+									"host": [
+										"api",
+										"zenevo",
+										"in"
+									],
+									"path": [
+										"support-service",
+										"users",
+										"0e60fcba-d990-4e04-8e86-b0b8511d1234",
+										"wallet"
+									]
+								},
+								"description": "City Admin Can Update User Wallet"
+							},
+							"response": []
+						},
+						{
+							"name": "/users/analytics/summary",
+							"request": {
+								"auth": {
+									"type": "bearer",
+									"bearer": [
+										{
+											"key": "token",
+											"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI0ZmVmOGRjNS01YjA3LTQyZTUtOGI2Ny1lODg3OGQyZjQ2OGYiLCJyb2xlcyI6WyJjdXN0b21lciJdLCJpYXQiOjE3NTgwMTM3OTUsImV4cCI6MTc1ODYxODU5NX0.QNxXjozS0w9y4ZmdQZqgY0JfB_ANj1bnHASqsnV_BgE",
+											"type": "string"
+										}
+									]
+								},
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "http://api.zenevo.in/support-service/users/analytics/summary",
+									"protocol": "http",
+									"host": [
+										"api",
+										"zenevo",
+										"in"
+									],
+									"path": [
+										"support-service",
+										"users",
+										"analytics",
+										"summary"
+									]
+								}
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "TicketSupport",
+					"item": [
+						{
+							"name": "/support/tickets",
+							"request": {
+								"auth": {
+									"type": "bearer",
+									"bearer": [
+										{
+											"key": "token",
+											"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI0ZmVmOGRjNS01YjA3LTQyZTUtOGI2Ny1lODg3OGQyZjQ2OGYiLCJyb2xlcyI6WyJjdXN0b21lciJdLCJpYXQiOjE3NTgwMTM3OTUsImV4cCI6MTc1ODYxODU5NX0.QNxXjozS0w9y4ZmdQZqgY0JfB_ANj1bnHASqsnV_BgE",
+											"type": "string"
+										}
+									]
+								},
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "http://api.zenevo.in/support-service/support/tickets",
+									"protocol": "http",
+									"host": [
+										"api",
+										"zenevo",
+										"in"
+									],
+									"path": [
+										"support-service",
+										"support",
+										"tickets"
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "/support/tickets",
+							"request": {
+								"auth": {
+									"type": "bearer",
+									"bearer": [
+										{
+											"key": "token",
+											"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhZ2VudElkIjoiZjI0YmRkZDEtNzJkMC00MDNiLTg1MDctM2I3NThmNmFmOTM4Iiwicm9sZSI6ImNpdHlfYWRtaW4iLCJjaXR5IjoiUHVuZSIsImlhdCI6MTc1ODEwMjA1MywiZXhwIjoxNzU4MTMwODUzfQ.gr3GHgKY4Eu2AvTsy1qoGd95G4BfdGS37zX9D6T7L0I",
+											"type": "string"
+										}
+									]
+								},
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\r\n  \"customerId\":\"4fef8dc5-5b07-42e5-8b67-e8878d2f468f\",\r\n  \"subject\": \"Refund\",\r\n  \"description\": \"Refund not Received yet\"\r\n\r\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "http://api.zenevo.in/support-service/support/tickets",
+									"protocol": "http",
+									"host": [
+										"api",
+										"zenevo",
+										"in"
+									],
+									"path": [
+										"support-service",
+										"support",
+										"tickets"
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "/support/tickets/{id}/status",
+							"request": {
+								"auth": {
+									"type": "bearer",
+									"bearer": [
+										{
+											"key": "token",
+											"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI0ZmVmOGRjNS01YjA3LTQyZTUtOGI2Ny1lODg3OGQyZjQ2OGYiLCJyb2xlcyI6WyJjdXN0b21lciJdLCJpYXQiOjE3NTgwMTM3OTUsImV4cCI6MTc1ODYxODU5NX0.QNxXjozS0w9y4ZmdQZqgY0JfB_ANj1bnHASqsnV_BgE",
+											"type": "string"
+										}
+									]
+								},
+								"method": "PUT",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\"status\": \"resolved\"}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "http://api.zenevo.in/support-service/support/tickets/4fef8dc5-5b07-42e5-8b67-e8878d2f468f/status",
+									"protocol": "http",
+									"host": [
+										"api",
+										"zenevo",
+										"in"
+									],
+									"path": [
+										"support-service",
+										"support",
+										"tickets",
+										"4fef8dc5-5b07-42e5-8b67-e8878d2f468f",
+										"status"
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "/support/quick-actions",
+							"request": {
+								"auth": {
+									"type": "bearer",
+									"bearer": [
+										{
+											"key": "token",
+											"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI0ZmVmOGRjNS01YjA3LTQyZTUtOGI2Ny1lODg3OGQyZjQ2OGYiLCJyb2xlcyI6WyJjdXN0b21lciJdLCJpYXQiOjE3NTgwMTM3OTUsImV4cCI6MTc1ODYxODU5NX0.QNxXjozS0w9y4ZmdQZqgY0JfB_ANj1bnHASqsnV_BgE",
+											"type": "string"
+										}
+									]
+								},
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "http://api.zenevo.in/support-service/support/quick-actions",
+									"protocol": "http",
+									"host": [
+										"api",
+										"zenevo",
+										"in"
+									],
+									"path": [
+										"support-service",
+										"support",
+										"quick-actions"
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "/support/notifications",
+							"request": {
+								"auth": {
+									"type": "bearer",
+									"bearer": [
+										{
+											"key": "token",
+											"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI0ZmVmOGRjNS01YjA3LTQyZTUtOGI2Ny1lODg3OGQyZjQ2OGYiLCJyb2xlcyI6WyJjdXN0b21lciJdLCJpYXQiOjE3NTgwMTM3OTUsImV4cCI6MTc1ODYxODU5NX0.QNxXjozS0w9y4ZmdQZqgY0JfB_ANj1bnHASqsnV_BgE",
+											"type": "string"
+										}
+									]
+								},
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "http://api.zenevo.in/support-service/support/notifications",
+									"protocol": "http",
+									"host": [
+										"api",
+										"zenevo",
+										"in"
+									],
+									"path": [
+										"support-service",
+										"support",
+										"notifications"
+									]
+								},
+								"description": "Schema Unavailable"
+							},
+							"response": []
+						},
+						{
+							"name": "/support/broadcast",
+							"request": {
+								"auth": {
+									"type": "bearer",
+									"bearer": [
+										{
+											"key": "token",
+											"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhZ2VudElkIjoiZjI0YmRkZDEtNzJkMC00MDNiLTg1MDctM2I3NThmNmFmOTM4Iiwicm9sZSI6ImNpdHlfYWRtaW4iLCJjaXR5IjoiUHVuZSIsImlhdCI6MTc1ODA5NjY4NSwiZXhwIjoxNzU4MTI1NDg1fQ.sU3_xE8jweawxxgiT37W7tFWAX55aQc9It3S_TIokgY",
+											"type": "string"
+										}
+									]
+								},
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\"message\": \"Scheduled maintenance tonight.\", \"target_audience\": \"drivers\"}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "http://api.zenevo.in/support-service/support/broadcast",
+									"protocol": "http",
+									"host": [
+										"api",
+										"zenevo",
+										"in"
+									],
+									"path": [
+										"support-service",
+										"support",
+										"broadcast"
+									]
+								}
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "RidesSupport",
+					"item": [
+						{
+							"name": "/rides/",
+							"request": {
+								"auth": {
+									"type": "bearer",
+									"bearer": [
+										{
+											"key": "token",
+											"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI0ZmVmOGRjNS01YjA3LTQyZTUtOGI2Ny1lODg3OGQyZjQ2OGYiLCJyb2xlcyI6WyJjdXN0b21lciJdLCJpYXQiOjE3NTgwMTM3OTUsImV4cCI6MTc1ODYxODU5NX0.QNxXjozS0w9y4ZmdQZqgY0JfB_ANj1bnHASqsnV_BgE",
+											"type": "string"
+										}
+									]
+								},
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "http://api.zenevo.in/support-service/rides",
+									"protocol": "http",
+									"host": [
+										"api",
+										"zenevo",
+										"in"
+									],
+									"path": [
+										"support-service",
+										"rides"
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "/rides/analytics/summary",
+							"request": {
+								"auth": {
+									"type": "bearer",
+									"bearer": [
+										{
+											"key": "token",
+											"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI0ZmVmOGRjNS01YjA3LTQyZTUtOGI2Ny1lODg3OGQyZjQ2OGYiLCJyb2xlcyI6WyJjdXN0b21lciJdLCJpYXQiOjE3NTgwMTM3OTUsImV4cCI6MTc1ODYxODU5NX0.QNxXjozS0w9y4ZmdQZqgY0JfB_ANj1bnHASqsnV_BgE",
+											"type": "string"
+										}
+									]
+								},
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "http://api.zenevo.in/support-service/rides/analytics/summary",
+									"protocol": "http",
+									"host": [
+										"api",
+										"zenevo",
+										"in"
+									],
+									"path": [
+										"support-service",
+										"rides",
+										"analytics",
+										"summary"
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "/rides/{id}",
+							"protocolProfileBehavior": {
+								"disableBodyPruning": true
+							},
+							"request": {
+								"auth": {
+									"type": "bearer",
+									"bearer": [
+										{
+											"key": "token",
+											"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI0ZmVmOGRjNS01YjA3LTQyZTUtOGI2Ny1lODg3OGQyZjQ2OGYiLCJyb2xlcyI6WyJjdXN0b21lciJdLCJpYXQiOjE3NTgwMTM3OTUsImV4cCI6MTc1ODYxODU5NX0.QNxXjozS0w9y4ZmdQZqgY0JfB_ANj1bnHASqsnV_BgE",
+											"type": "string"
+										}
+									]
+								},
+								"method": "GET",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "http://api.zenevo.in/support-service/support-service/rides/4b6a95fd-6952-4af8-8a98-0664e147b92d",
+									"protocol": "http",
+									"host": [
+										"api",
+										"zenevo",
+										"in"
+									],
+									"path": [
+										"support-service",
+										"support-service",
+										"rides",
+										"4b6a95fd-6952-4af8-8a98-0664e147b92d"
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "/rides/{id}/status",
+							"request": {
+								"auth": {
+									"type": "bearer",
+									"bearer": [
+										{
+											"key": "token",
+											"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI0ZmVmOGRjNS01YjA3LTQyZTUtOGI2Ny1lODg3OGQyZjQ2OGYiLCJyb2xlcyI6WyJjdXN0b21lciJdLCJpYXQiOjE3NTgwMTM3OTUsImV4cCI6MTc1ODYxODU5NX0.QNxXjozS0w9y4ZmdQZqgY0JfB_ANj1bnHASqsnV_BgE",
+											"type": "string"
+										}
+									]
+								},
+								"method": "PUT",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\r\n    \"status\": \"completed\"\r\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "http://api.zenevo.in/support-service/support-service/rides/4b6a95fd-6952-4af8-8a98-0664e147b92d/status",
+									"protocol": "http",
+									"host": [
+										"api",
+										"zenevo",
+										"in"
+									],
+									"path": [
+										"support-service",
+										"support-service",
+										"rides",
+										"4b6a95fd-6952-4af8-8a98-0664e147b92d",
+										"status"
+									]
+								}
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "Report",
+					"item": [
+						{
+							"name": "/reports/driver-performance",
+							"request": {
+								"auth": {
+									"type": "bearer",
+									"bearer": [
+										{
+											"key": "token",
+											"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI0ZmVmOGRjNS01YjA3LTQyZTUtOGI2Ny1lODg3OGQyZjQ2OGYiLCJyb2xlcyI6WyJjdXN0b21lciJdLCJpYXQiOjE3NTgwMTM3OTUsImV4cCI6MTc1ODYxODU5NX0.QNxXjozS0w9y4ZmdQZqgY0JfB_ANj1bnHASqsnV_BgE",
+											"type": "string"
+										}
+									]
+								},
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "http://api.zenevo.in/support-service/reports/driver-performance",
+									"protocol": "http",
+									"host": [
+										"api",
+										"zenevo",
+										"in"
+									],
+									"path": [
+										"support-service",
+										"reports",
+										"driver-performance"
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "/reports/financial",
+							"request": {
+								"auth": {
+									"type": "bearer",
+									"bearer": [
+										{
+											"key": "token",
+											"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhZ2VudElkIjoiZjI0YmRkZDEtNzJkMC00MDNiLTg1MDctM2I3NThmNmFmOTM4Iiwicm9sZSI6ImNpdHlfYWRtaW4iLCJjaXR5IjoiUHVuZSIsImlhdCI6MTc1ODA5NjY4NSwiZXhwIjoxNzU4MTI1NDg1fQ.sU3_xE8jweawxxgiT37W7tFWAX55aQc9It3S_TIokgY",
+											"type": "string"
+										}
+									]
+								},
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "http://api.zenevo.in/support-service/reports/financial",
+									"protocol": "http",
+									"host": [
+										"api",
+										"zenevo",
+										"in"
+									],
+									"path": [
+										"support-service",
+										"reports",
+										"financial"
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "/reports/weekly",
+							"request": {
+								"auth": {
+									"type": "bearer",
+									"bearer": [
+										{
+											"key": "token",
+											"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI0ZmVmOGRjNS01YjA3LTQyZTUtOGI2Ny1lODg3OGQyZjQ2OGYiLCJyb2xlcyI6WyJjdXN0b21lciJdLCJpYXQiOjE3NTgwMTM3OTUsImV4cCI6MTc1ODYxODU5NX0.QNxXjozS0w9y4ZmdQZqgY0JfB_ANj1bnHASqsnV_BgE",
+											"type": "string"
+										}
+									]
+								},
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "http://api.zenevo.in/support-service/reports/weekly",
+									"protocol": "http",
+									"host": [
+										"api",
+										"zenevo",
+										"in"
+									],
+									"path": [
+										"support-service",
+										"reports",
+										"weekly"
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "/reports/daily",
+							"request": {
+								"auth": {
+									"type": "bearer",
+									"bearer": [
+										{
+											"key": "token",
+											"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI0ZmVmOGRjNS01YjA3LTQyZTUtOGI2Ny1lODg3OGQyZjQ2OGYiLCJyb2xlcyI6WyJjdXN0b21lciJdLCJpYXQiOjE3NTgwMTM3OTUsImV4cCI6MTc1ODYxODU5NX0.QNxXjozS0w9y4ZmdQZqgY0JfB_ANj1bnHASqsnV_BgE",
+											"type": "string"
+										}
+									]
+								},
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "http://api.zenevo.in/support-service/reports/daily",
+									"protocol": "http",
+									"host": [
+										"api",
+										"zenevo",
+										"in"
+									],
+									"path": [
+										"support-service",
+										"reports",
+										"daily"
+									]
+								}
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "Dashboard",
+					"item": [
+						{
+							"name": "/dashboard/overview",
+							"request": {
+								"auth": {
+									"type": "bearer",
+									"bearer": [
+										{
+											"key": "token",
+											"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI0ZmVmOGRjNS01YjA3LTQyZTUtOGI2Ny1lODg3OGQyZjQ2OGYiLCJyb2xlcyI6WyJjdXN0b21lciJdLCJpYXQiOjE3NTgwMTM3OTUsImV4cCI6MTc1ODYxODU5NX0.QNxXjozS0w9y4ZmdQZqgY0JfB_ANj1bnHASqsnV_BgE",
+											"type": "string"
+										}
+									]
+								},
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "http://api.zenevo.in/support-service/dashboard/overview",
+									"protocol": "http",
+									"host": [
+										"api",
+										"zenevo",
+										"in"
+									],
+									"path": [
+										"support-service",
+										"dashboard",
+										"overview"
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "/dashboard/analytics",
+							"request": {
+								"auth": {
+									"type": "bearer",
+									"bearer": [
+										{
+											"key": "token",
+											"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI0ZmVmOGRjNS01YjA3LTQyZTUtOGI2Ny1lODg3OGQyZjQ2OGYiLCJyb2xlcyI6WyJjdXN0b21lciJdLCJpYXQiOjE3NTgwMTM3OTUsImV4cCI6MTc1ODYxODU5NX0.QNxXjozS0w9y4ZmdQZqgY0JfB_ANj1bnHASqsnV_BgE",
+											"type": "string"
+										}
+									]
+								},
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "http://api.zenevo.in/support-service/dashboard/analytics",
+									"protocol": "http",
+									"host": [
+										"api",
+										"zenevo",
+										"in"
+									],
+									"path": [
+										"support-service",
+										"dashboard",
+										"analytics"
+									]
+								}
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "Agent",
+					"item": [
+						{
+							"name": "/agent/status",
+							"request": {
+								"auth": {
+									"type": "bearer",
+									"bearer": [
+										{
+											"key": "token",
+											"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhZ2VudElkIjoiZjI0YmRkZDEtNzJkMC00MDNiLTg1MDctM2I3NThmNmFmOTM4Iiwicm9sZSI6ImNpdHlfYWRtaW4iLCJjaXR5IjoiUHVuZSIsImlhdCI6MTc1ODA5ODY1MSwiZXhwIjoxNzU4MTI3NDUxfQ.iK8PuD-AC5_12mdDsFZ2qrVXSn5M_dvX-mMo4M-My6Q",
+											"type": "string"
+										}
+									]
+								},
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\r\n  \r\n  \"status\": \"online\"\r\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "http://api.zenevo.in/support-service/agent/status",
+									"protocol": "http",
+									"host": [
+										"api",
+										"zenevo",
+										"in"
+									],
+									"path": [
+										"support-service",
+										"agent",
+										"status"
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "/agent/workload",
+							"request": {
+								"auth": {
+									"type": "bearer",
+									"bearer": [
+										{
+											"key": "token",
+											"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhZ2VudElkIjoiZjI0YmRkZDEtNzJkMC00MDNiLTg1MDctM2I3NThmNmFmOTM4Iiwicm9sZSI6ImNpdHlfYWRtaW4iLCJjaXR5IjoiUHVuZSIsImlhdCI6MTc1ODA5ODY1MSwiZXhwIjoxNzU4MTI3NDUxfQ.iK8PuD-AC5_12mdDsFZ2qrVXSn5M_dvX-mMo4M-My6Q",
+											"type": "string"
+										}
+									]
+								},
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "http://api.zenevo.in/support-service/agent/workload",
+									"protocol": "http",
+									"host": [
+										"api",
+										"zenevo",
+										"in"
+									],
+									"path": [
+										"support-service",
+										"agent",
+										"workload"
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "/agent/assign-unassigned",
+							"request": {
+								"auth": {
+									"type": "bearer",
+									"bearer": [
+										{
+											"key": "token",
+											"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhZ2VudElkIjoiZjI0YmRkZDEtNzJkMC00MDNiLTg1MDctM2I3NThmNmFmOTM4Iiwicm9sZSI6ImNpdHlfYWRtaW4iLCJjaXR5IjoiUHVuZSIsImlhdCI6MTc1ODA5ODY1MSwiZXhwIjoxNzU4MTI3NDUxfQ.iK8PuD-AC5_12mdDsFZ2qrVXSn5M_dvX-mMo4M-My6Q",
+											"type": "string"
+										}
+									]
+								},
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "http://api.zenevo.in/support-service/agent/assign-unassigned",
+									"protocol": "http",
+									"host": [
+										"api",
+										"zenevo",
+										"in"
+									],
+									"path": [
+										"support-service",
+										"agent",
+										"assign-unassigned"
+									]
+								}
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "Tickets",
+					"item": [
+						{
+							"name": "/tickets/",
+							"request": {
+								"auth": {
+									"type": "bearer",
+									"bearer": [
+										{
+											"key": "token",
+											"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhZ2VudElkIjoiZjI0YmRkZDEtNzJkMC00MDNiLTg1MDctM2I3NThmNmFmOTM4Iiwicm9sZSI6ImNpdHlfYWRtaW4iLCJjaXR5IjoiUHVuZSIsImlhdCI6MTc1ODA5NjY4NSwiZXhwIjoxNzU4MTI1NDg1fQ.sU3_xE8jweawxxgiT37W7tFWAX55aQc9It3S_TIokgY",
+											"type": "string"
+										}
+									]
+								},
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\r\n  \"customerId\": \"4fef8dc5-5b07-42e5-8b67-e8878d2f468f\",\r\n  \"subject\": \"Refund\",\r\n  \"description\": \"Refund is less\"\r\n\r\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "http://api.zenevo.in/support-service/tickets",
+									"protocol": "http",
+									"host": [
+										"api",
+										"zenevo",
+										"in"
+									],
+									"path": [
+										"support-service",
+										"tickets"
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "/tickets/",
+							"request": {
+								"auth": {
+									"type": "bearer",
+									"bearer": [
+										{
+											"key": "token",
+											"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhZ2VudElkIjoiZjI0YmRkZDEtNzJkMC00MDNiLTg1MDctM2I3NThmNmFmOTM4Iiwicm9sZSI6ImNpdHlfYWRtaW4iLCJjaXR5IjoiUHVuZSIsImlhdCI6MTc1ODA5ODY1MSwiZXhwIjoxNzU4MTI3NDUxfQ.iK8PuD-AC5_12mdDsFZ2qrVXSn5M_dvX-mMo4M-My6Q",
+											"type": "string"
+										}
+									]
+								},
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "http://api.zenevo.in/support-service/tickets/",
+									"protocol": "http",
+									"host": [
+										"api",
+										"zenevo",
+										"in"
+									],
+									"path": [
+										"support-service",
+										"tickets",
+										""
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "/tickets/{id}",
+							"request": {
+								"auth": {
+									"type": "bearer",
+									"bearer": [
+										{
+											"key": "token",
+											"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhZ2VudElkIjoiZjI0YmRkZDEtNzJkMC00MDNiLTg1MDctM2I3NThmNmFmOTM4Iiwicm9sZSI6ImNpdHlfYWRtaW4iLCJjaXR5IjoiUHVuZSIsImlhdCI6MTc1ODEwMjA1MywiZXhwIjoxNzU4MTMwODUzfQ.gr3GHgKY4Eu2AvTsy1qoGd95G4BfdGS37zX9D6T7L0I",
+											"type": "string"
+										}
+									]
+								},
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "http://api.zenevo.in/support-service/tickets/11111111-1111-1111-1111-111111111111",
+									"protocol": "http",
+									"host": [
+										"api",
+										"zenevo",
+										"in"
+									],
+									"path": [
+										"support-service",
+										"tickets",
+										"11111111-1111-1111-1111-111111111111"
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "/tickets/{id}/status",
+							"request": {
+								"auth": {
+									"type": "bearer",
+									"bearer": [
+										{
+											"key": "token",
+											"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhZ2VudElkIjoiZjI0YmRkZDEtNzJkMC00MDNiLTg1MDctM2I3NThmNmFmOTM4Iiwicm9sZSI6ImNpdHlfYWRtaW4iLCJjaXR5IjoiUHVuZSIsImlhdCI6MTc1ODA5ODY1MSwiZXhwIjoxNzU4MTI3NDUxfQ.iK8PuD-AC5_12mdDsFZ2qrVXSn5M_dvX-mMo4M-My6Q",
+											"type": "string"
+										}
+									]
+								},
+								"method": "PUT",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\r\n    \"status\": \"pending_customer\"\r\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "http://api.zenevo.in/support-service/tickets/11111111-1111-1111-1111-111111111111/status",
+									"protocol": "http",
+									"host": [
+										"api",
+										"zenevo",
+										"in"
+									],
+									"path": [
+										"support-service",
+										"tickets",
+										"11111111-1111-1111-1111-111111111111",
+										"status"
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "/tickets/{id}/messages",
+							"request": {
+								"auth": {
+									"type": "bearer",
+									"bearer": [
+										{
+											"key": "token",
+											"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhZ2VudElkIjoiZjI0YmRkZDEtNzJkMC00MDNiLTg1MDctM2I3NThmNmFmOTM4Iiwicm9sZSI6ImNpdHlfYWRtaW4iLCJjaXR5IjoiUHVuZSIsImlhdCI6MTc1ODA5ODY1MSwiZXhwIjoxNzU4MTI3NDUxfQ.iK8PuD-AC5_12mdDsFZ2qrVXSn5M_dvX-mMo4M-My6Q",
+											"type": "string"
+										}
+									]
+								},
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\r\n    \"message\": \"too late to be resolved\"\r\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "http://api.zenevo.in/support-service/tickets/11111111-1111-1111-1111-111111111111/messages",
+									"protocol": "http",
+									"host": [
+										"api",
+										"zenevo",
+										"in"
+									],
+									"path": [
+										"support-service",
+										"tickets",
+										"11111111-1111-1111-1111-111111111111",
+										"messages"
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "/tickets/{id}/messages",
+							"request": {
+								"auth": {
+									"type": "bearer",
+									"bearer": [
+										{
+											"key": "token",
+											"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhZ2VudElkIjoiZjI0YmRkZDEtNzJkMC00MDNiLTg1MDctM2I3NThmNmFmOTM4Iiwicm9sZSI6ImNpdHlfYWRtaW4iLCJjaXR5IjoiUHVuZSIsImlhdCI6MTc1ODA5ODY1MSwiZXhwIjoxNzU4MTI3NDUxfQ.iK8PuD-AC5_12mdDsFZ2qrVXSn5M_dvX-mMo4M-My6Q",
+											"type": "string"
+										}
+									]
+								},
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "http://api.zenevo.in/support-service/tickets/55555555-5555-5555-5555-555555555555/messages",
+									"protocol": "http",
+									"host": [
+										"api",
+										"zenevo",
+										"in"
+									],
+									"path": [
+										"support-service",
+										"tickets",
+										"55555555-5555-5555-5555-555555555555",
+										"messages"
+									]
+								}
+							},
+							"response": []
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "AdminService",
+			"item": [
+				{
+					"name": "/admin/agents",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhZ2VudElkIjoiZjI0YmRkZDEtNzJkMC00MDNiLTg1MDctM2I3NThmNmFmOTM4Iiwicm9sZSI6ImNpdHlfYWRtaW4iLCJjaXR5IjoiUHVuZSIsImlhdCI6MTc1ODEwMDczNywiZXhwIjoxNzU4MTI5NTM3fQ.O3c6RHHxQikVBahhn5r4lX113wNJyPAkulTe1TcwczU",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n    \"fullName\": \"New Agent\",\r\n    \"email\": \"agent@example.com\",\r\n    \"role\": \"support\",\r\n    \"city\": \"mumbai\"\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://api.zenevo.in/admin-service/admin/agents",
+							"protocol": "http",
+							"host": [
+								"api",
+								"zenevo",
+								"in"
+							],
+							"path": [
+								"admin-service",
+								"admin",
+								"agents"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "/admin/agents",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhZ2VudElkIjoiZjI0YmRkZDEtNzJkMC00MDNiLTg1MDctM2I3NThmNmFmOTM4Iiwicm9sZSI6ImNpdHlfYWRtaW4iLCJjaXR5IjoiUHVuZSIsImlhdCI6MTc1ODEwMDczNywiZXhwIjoxNzU4MTI5NTM3fQ.O3c6RHHxQikVBahhn5r4lX113wNJyPAkulTe1TcwczU",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://api.zenevo.in/admin-service/admin/agents",
+							"protocol": "http",
+							"host": [
+								"api",
+								"zenevo",
+								"in"
+							],
+							"path": [
+								"admin-service",
+								"admin",
+								"agents"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "/agents/{id}/status",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhZ2VudElkIjoiZjI0YmRkZDEtNzJkMC00MDNiLTg1MDctM2I3NThmNmFmOTM4Iiwicm9sZSI6ImNpdHlfYWRtaW4iLCJjaXR5IjoiUHVuZSIsImlhdCI6MTc1ODEwMDczNywiZXhwIjoxNzU4MTI5NTM3fQ.O3c6RHHxQikVBahhn5r4lX113wNJyPAkulTe1TcwczU",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PUT",
+						"header": [],
+						"url": {
+							"raw": "http://api.zenevo.in/admin-service/admin/agents/{id}/status",
+							"protocol": "http",
+							"host": [
+								"api",
+								"zenevo",
+								"in"
+							],
+							"path": [
+								"admin-service",
+								"admin",
+								"agents",
+								"{id}",
+								"status"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "/tickets/reassign",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhZ2VudElkIjoiZjI0YmRkZDEtNzJkMC00MDNiLTg1MDctM2I3NThmNmFmOTM4Iiwicm9sZSI6ImNpdHlfYWRtaW4iLCJjaXR5IjoiUHVuZSIsImlhdCI6MTc1ODEwMDczNywiZXhwIjoxNzU4MTI5NTM3fQ.O3c6RHHxQikVBahhn5r4lX113wNJyPAkulTe1TcwczU",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://api.zenevo.in/admin-service/admin//tickets/reassign",
+							"protocol": "http",
+							"host": [
+								"api",
+								"zenevo",
+								"in"
+							],
+							"path": [
+								"admin-service",
+								"admin",
+								"",
+								"tickets",
+								"reassign"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "/admin/tickets/{id}/reassign",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhZ2VudElkIjoiZjI0YmRkZDEtNzJkMC00MDNiLTg1MDctM2I3NThmNmFmOTM4Iiwicm9sZSI6ImNpdHlfYWRtaW4iLCJjaXR5IjoiUHVuZSIsImlhdCI6MTc1ODEwMDczNywiZXhwIjoxNzU4MTI5NTM3fQ.O3c6RHHxQikVBahhn5r4lX113wNJyPAkulTe1TcwczU",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://api.zenevo.in/admin-service/admin/tickets/{id}/reassign",
+							"protocol": "http",
+							"host": [
+								"api",
+								"zenevo",
+								"in"
+							],
+							"path": [
+								"admin-service",
+								"admin",
+								"tickets",
+								"{id}",
+								"reassign"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "/admin-service/admin/cities",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyNDdhZmZmMy1mZmZiLTRhYWYtODU5Zi0zOTNjODRhNzMxNzEiLCJyb2xlIjoiY2VudHJhbF9hZG1pbiIsImNpdHkiOiJDZW50cmFsIiwiaWF0IjoxNzU4NjAyNjIzLCJleHAiOjE3NTg2MzE0MjN9.-7dm_kgtSLuLFPGpIONepiWfDZXIfA3vxuuB_IcJpvk",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n  \"cityName\": \"Bengaluru\",\r\n  \"status\": \"active\",\r\n  \"launchDate\": \"2025-10-01\"\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://localhost:3004/admin/cities",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "3004",
+							"path": [
+								"admin",
+								"cities"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "/admin-service/admin/cities",
+					"request": {
+						"method": "GET",
+						"header": []
+					},
+					"response": []
+				},
+				{
+					"name": "/admin-service/admin/cities/:cityId",
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n  \"status\": \"inactive\",\r\n  \"launchDate\": \"2025-12-31\"\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://api.zenevo.in/admin-service/admin/cities/:cityId",
+							"protocol": "http",
+							"host": [
+								"api",
+								"zenevo",
+								"in"
+							],
+							"path": [
+								"admin-service",
+								"admin",
+								"cities",
+								":cityId"
+							],
+							"variable": [
+								{
+									"key": "cityId",
+									"value": ""
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Verificationservice",
+			"item": [
+				{
+					"name": "/documents/drivers/pending",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhZ2VudElkIjoiZjIxYmRkZDEtNzJkMC00MDNiLTg1MDctM2I3NThmNmFmOTM4Iiwicm9sZSI6InN1cHBvcnQiLCJjaXR5IjoiUHVuZSIsImlhdCI6MTc1ODU2NjE5OCwiZXhwIjoxNzU4NTk0OTk4fQ.oUWyl2_42m_kG2V2QQ-MjoG5UKVHXUYRpjNiy1sFcq4",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://api.zenevo.in/verification-service/documents/drivers/pending",
+							"protocol": "http",
+							"host": [
+								"api",
+								"zenevo",
+								"in"
+							],
+							"path": [
+								"verification-service",
+								"documents",
+								"drivers",
+								"pending"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "/documents/drivers/{driverID}/documents",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhZ2VudElkIjoiZjIxYmRkZDEtNzJkMC00MDNiLTg1MDctM2I3NThmNmFmOTM4Iiwicm9sZSI6InN1cHBvcnQiLCJjaXR5IjoicHVuZSIsImlhdCI6MTc1ODU2NDk4NywiZXhwIjoxNzU4NTkzNzg3fQ.KmbQRQi0g1cYDwt7GczYbu93BgDYV81iOZic37uffCY",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://api.zenevo.in/verification-service/documents/drivers/e51a652d-d5db-4d8a-84aa-a46ab721aefe/documents",
+							"protocol": "http",
+							"host": [
+								"api",
+								"zenevo",
+								"in"
+							],
+							"path": [
+								"verification-service",
+								"documents",
+								"drivers",
+								"e51a652d-d5db-4d8a-84aa-a46ab721aefe",
+								"documents"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "/documents/{DocId}/status",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhZ2VudElkIjoiZjIxYmRkZDEtNzJkMC00MDNiLTg1MDctM2I3NThmNmFmOTM4Iiwicm9sZSI6InN1cHBvcnQiLCJjaXR5IjoiUHVuZSIsImlhdCI6MTc1ODU2NjE5OCwiZXhwIjoxNzU4NTk0OTk4fQ.oUWyl2_42m_kG2V2QQ-MjoG5UKVHXUYRpjNiy1sFcq4",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PUT",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n  \"status\": \"rejected\",\r\n  \"rejection_reason\": \"The license number in the uploaded image is blurry and not readable.\"\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://api.zenevo.in/verification-service/documents/7a4e2ac9-c520-41df-b7bf-b4f1450f98c0/status",
+							"protocol": "http",
+							"host": [
+								"api",
+								"zenevo",
+								"in"
+							],
+							"path": [
+								"verification-service",
+								"documents",
+								"7a4e2ac9-c520-41df-b7bf-b4f1450f98c0",
+								"status"
+							]
+						}
+					},
+					"response": []
+				}
+			],
+			"description": "{  \n\"status\": \"approved\"  \n}\n\n{ \"status\": \"rejected\",\n\n\"rejection_reason\": \"The license number in the uploaded image is blurry and not readable.\"\n\n}"
+		}
+	],
+	"auth": {
+		"type": "apikey",
+		"apikey": [
+			{
+				"key": "key",
+				"value": "X-API-Key",
+				"type": "string"
+			},
+			{
+				"key": "value",
+				"value": "{{token}}",
+				"type": "string"
+			}
+		]
+	},
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "https://farming-simulator.pstmn.io"
+		}
+	]
+}
