@@ -6,7 +6,7 @@ module.exports = {
       script : "./index.js",
       watch: false,
       env: {
-        PORT: process.env.PORT || 80
+        PORT: 3000
       }
     }, {
       name   : "user-service",

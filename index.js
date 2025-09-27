@@ -9,7 +9,7 @@ const { monitor } = require('./shared/dbMonitor');
 const app = express();
 
 // --- Configuration ---
-const PORT = process.env.PORT || 80; 
+const PORT = process.env.PORT || 3000; 
 
 // The internal URLs for your microservices.
 const USER_SERVICE_URL = 'http://localhost:3001';
