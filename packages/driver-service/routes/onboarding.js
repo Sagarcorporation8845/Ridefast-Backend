@@ -78,13 +78,13 @@ router.post('/personal-details', tokenVerify, async (req, res) => {
 });
 
 
-// --- SECURED Vehicle Details Endpoint (With Registration Number Standardization) ---
+// --- SECURED Vehicle Details Endpoint (With Registration Number Standardization and Validation) ---
 router.post('/vehicle-details', tokenVerify, async (req, res) => {
     const { vehicleType, registrationNumber, modelName, fuelType } = req.body;
     const userId = req.user.userId; 
 
     const allowedVehicleTypes = ['bike', 'auto', 'car', 'commercial'];
-    const allowedFuelTypes = ['electric', 'petrol', 'diesel', 'hybrid'];
+    const allowedFuelTypes = ['electric', 'petrol', 'diesel', 'hybrid', 'cng' ];
 
     if (!vehicleType || !registrationNumber || !modelName || !fuelType) {
         return res.status(400).json({ message: 'All vehicle fields are required.' });
@@ -96,8 +96,15 @@ router.post('/vehicle-details', tokenVerify, async (req, res) => {
         return res.status(400).json({ message: `Invalid fuel type.` });
     }
 
+    // Convert to uppercase and remove spaces and hyphens
     const standardizedRegNumber = registrationNumber.replace(/[\s-]/g, '').toUpperCase();
-    
+
+    // Indian vehicle number plate validation regex
+    const registrationNumberRegex = /^[A-Z]{2}[0-9]{2}[A-Z]{2}[0-9]{4}$/;
+    if (!registrationNumberRegex.test(standardizedRegNumber)) {
+        return res.status(400).json({ message: 'Please enter a correct vehicle number. Follow this format: MH01AB1234' });
+    }
+
     try {
         const driverResult = await db.query('SELECT id FROM drivers WHERE user_id = $1', [userId]);
         if (driverResult.rows.length === 0) {
