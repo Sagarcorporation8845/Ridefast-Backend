@@ -26,7 +26,19 @@ const connectDb = async () => {
 // The query function now uses the smart service that handles fallbacks
 const query = (text, params) => dbService.query(text, params);
 
+// FIX: Expose a getClient function to allow for transactions
+const getClient = () => {
+  if (dbService.centralDb && dbService.centralDb.centralPool) {
+    return dbService.centralDb.centralPool.connect();
+  }
+  if (dbService.localPool) {
+    return dbService.localPool.connect();
+  }
+  throw new Error('No database pool available to get a client from.');
+};
+
 module.exports = {
   query,
   connectDb,
+  getClient, // Export the new function
 };

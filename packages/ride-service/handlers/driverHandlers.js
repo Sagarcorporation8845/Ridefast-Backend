@@ -1,6 +1,5 @@
 // packages/ride-service/handlers/driverHandlers.js
 const db = require('../db');
-// FIX: Destructure redisClient correctly from the imported module
 const { redisClient } = require('../services/redisClient');
 
 // Handles the driver's change of status (online, offline, go_home)
@@ -13,7 +12,8 @@ const handleStatusChange = async (ws, message) => {
     return ws.send(JSON.stringify({ type: 'error', message: 'Invalid status provided.' }));
   }
 
-  const client = await db.getClient(); // Use a client for transactions
+  // FIX: Use a database client for transactions
+  const client = await db.getClient(); 
 
   try {
     // 1. Begin a transaction
