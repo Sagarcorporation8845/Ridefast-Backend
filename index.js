@@ -98,7 +98,7 @@ app.use('/admin-service', createProxyMiddleware({
     },
 }));
 
-// Proxy requests for the Signaling Service (WebSocket)
+
 app.use('/verification-service', createProxyMiddleware({
     target: VERIFICATION_SERVICE_URL,
     changeOrigin: true,
@@ -107,6 +107,14 @@ app.use('/verification-service', createProxyMiddleware({
     },
 }));
 
+app.use('/ride-service', createProxyMiddleware({
+    target: RIDE_SERVICE_URL,
+    changeOrigin: true,
+    ws: true, // <-- IMPORTANT: This enables WebSocket proxying
+    pathRewrite: {
+        '^/ride-service': '', 
+    },
+}));
 
 // --- Start the Server ---
 const startServer = async () => {
