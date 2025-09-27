@@ -1,5 +1,8 @@
 // packages/ride-service/index.js
-require('dotenv').config();
+const path = require('path'); // Import the path module
+// FIX: Provide a specific path to the .env file for this service
+require('dotenv').config({ path: path.resolve(__dirname, './.env') });
+
 const express = require('express');
 const http = require('http');
 const { WebSocketServer } = require('ws');

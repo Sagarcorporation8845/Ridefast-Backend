@@ -1,3 +1,4 @@
+// packages/ride-service/handlers/driverHandlers.js
 const db = require('../db');
 // FIX: Destructure redisClient correctly from the imported module
 const { redisClient } = require('../services/redisClient');
@@ -12,9 +13,14 @@ const handleStatusChange = async (ws, message) => {
     return ws.send(JSON.stringify({ type: 'error', message: 'Invalid status provided.' }));
   }
 
+  const client = await db.getClient(); // Use a client for transactions
+
   try {
-    // 1. Update the persistent state in PostgreSQL
-    await db.query(
+    // 1. Begin a transaction
+    await client.query('BEGIN');
+
+    // 2. Update the persistent state in PostgreSQL
+    await client.query(
       "UPDATE drivers SET online_status = $1 WHERE id = $2",
       [status, driverId]
     );
@@ -22,7 +28,7 @@ const handleStatusChange = async (ws, message) => {
     const geoKey = `online_drivers:${city}`;
     const stateKey = `driver:state:${driverId}`;
 
-    // 2. Update the real-time state in Redis
+    // 3. Update the real-time state in Redis
     if (status === 'online' || status === 'go_home') {
       await redisClient.hSet(stateKey, 'status', status);
       console.log(`Driver ${driverId} is now ${status}.`);
@@ -32,11 +38,19 @@ const handleStatusChange = async (ws, message) => {
       console.log(`Driver ${driverId} is now offline.`);
     }
 
+    // 4. Commit the transaction
+    await client.query('COMMIT');
+
     ws.send(JSON.stringify({ type: 'status_updated', status }));
 
   } catch (error) {
+    // 5. Rollback the transaction in case of an error
+    await client.query('ROLLBACK');
     console.error(`Error updating status for driver ${driverId}:`, error);
     ws.send(JSON.stringify({ type: 'error', message: 'Failed to update status.' }));
+  } finally {
+    // 6. Release the client back to the pool
+    client.release();
   }
 };
 

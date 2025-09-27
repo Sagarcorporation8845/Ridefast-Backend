@@ -1,5 +1,7 @@
 // packages/verification-service/index.js
-require('dotenv').config();
+const path = require('path'); // Import the path module
+require('dotenv').config({ path: path.resolve(__dirname, './.env') }); // FIX: Provide a specific path
+
 const express = require('express');
 const cors = require('cors');
 const { connectDb } = require('./db');
