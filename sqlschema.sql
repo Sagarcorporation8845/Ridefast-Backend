@@ -2,12 +2,12 @@
 -- PostgreSQL database dump
 --
 
-\restrict n7etftg5NYxiuGh3KBkX0e1lN6yepn2JLGjbkMfeo6i8WYJsHlnOCTHnEP9te31
+\restrict 7Jgl6dBHbTsH1T7jFyZ8aqUzD3MdvMumSRkOWdGHxlH3fKSHGJEFrpsPV9UKsM3
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.6
 
--- Started on 2025-09-13 20:48:13
+-- Started on 2025-09-27 13:12:51
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -30,7 +30,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA public;
 
 
 --
--- TOC entry 4576 (class 0 OID 0)
+-- TOC entry 4644 (class 0 OID 0)
 -- Dependencies: 2
 -- Name: EXTENSION "uuid-ossp"; Type: COMMENT; Schema: -; Owner: 
 --
@@ -38,12 +38,113 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA public;
 COMMENT ON EXTENSION "uuid-ossp" IS 'generate universally unique identifiers (UUIDs)';
 
 
+--
+-- TOC entry 255 (class 1255 OID 16858)
+-- Name: update_agent_ticket_count(); Type: FUNCTION; Schema: public; Owner: avnadmin
+--
+
+CREATE FUNCTION public.update_agent_ticket_count() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    IF TG_OP = 'INSERT' AND NEW.assigned_agent_id IS NOT NULL THEN
+        -- Increment count when ticket is assigned
+        INSERT INTO agent_status (agent_id, active_tickets_count, updated_at)
+        VALUES (NEW.assigned_agent_id, 1, NOW())
+        ON CONFLICT (agent_id) 
+        DO UPDATE SET 
+            active_tickets_count = agent_status.active_tickets_count + 1,
+            updated_at = NOW();
+            
+    ELSIF TG_OP = 'UPDATE' THEN
+        -- Handle assignment changes
+        IF OLD.assigned_agent_id IS NOT NULL AND NEW.assigned_agent_id IS NULL THEN
+            -- Ticket unassigned
+            UPDATE agent_status 
+            SET active_tickets_count = GREATEST(active_tickets_count - 1, 0),
+                updated_at = NOW()
+            WHERE agent_id = OLD.assigned_agent_id;
+                
+        ELSIF OLD.assigned_agent_id IS NULL AND NEW.assigned_agent_id IS NOT NULL THEN
+            -- Ticket assigned
+            INSERT INTO agent_status (agent_id, active_tickets_count, updated_at)
+            VALUES (NEW.assigned_agent_id, 1, NOW())
+            ON CONFLICT (agent_id) 
+            DO UPDATE SET 
+                active_tickets_count = agent_status.active_tickets_count + 1,
+                updated_at = NOW();
+                
+        ELSIF OLD.assigned_agent_id IS NOT NULL AND NEW.assigned_agent_id IS NOT NULL 
+              AND OLD.assigned_agent_id != NEW.assigned_agent_id THEN
+            -- Ticket reassigned
+            UPDATE agent_status 
+            SET active_tickets_count = GREATEST(active_tickets_count - 1, 0),
+                updated_at = NOW()
+            WHERE agent_id = OLD.assigned_agent_id;
+            
+            INSERT INTO agent_status (agent_id, active_tickets_count, updated_at)
+            VALUES (NEW.assigned_agent_id, 1, NOW())
+            ON CONFLICT (agent_id) 
+            DO UPDATE SET 
+                active_tickets_count = agent_status.active_tickets_count + 1,
+                updated_at = NOW();
+        END IF;
+        
+        -- Handle status changes that affect ticket counts
+        IF OLD.status != NEW.status THEN
+            IF NEW.status IN ('resolved', 'closed') AND OLD.status NOT IN ('resolved', 'closed') THEN
+                -- Ticket completed, decrement count
+                IF NEW.assigned_agent_id IS NOT NULL THEN
+                    UPDATE agent_status 
+                    SET active_tickets_count = GREATEST(active_tickets_count - 1, 0),
+                        updated_at = NOW()
+                    WHERE agent_id = NEW.assigned_agent_id;
+                END IF;
+            ELSIF OLD.status IN ('resolved', 'closed') AND NEW.status NOT IN ('resolved', 'closed') THEN
+                -- Ticket reopened, increment count
+                IF NEW.assigned_agent_id IS NOT NULL THEN
+                    INSERT INTO agent_status (agent_id, active_tickets_count, updated_at)
+                    VALUES (NEW.assigned_agent_id, 1, NOW())
+                    ON CONFLICT (agent_id) 
+                    DO UPDATE SET 
+                        active_tickets_count = agent_status.active_tickets_count + 1,
+                        updated_at = NOW();
+                END IF;
+            END IF;
+        END IF;
+    END IF;
+    
+    RETURN COALESCE(NEW, OLD);
+END;
+$$;
+
+
+ALTER FUNCTION public.update_agent_ticket_count() OWNER TO avnadmin;
+
 SET default_tablespace = '';
 
 SET default_table_access_method = heap;
 
 --
--- TOC entry 228 (class 1259 OID 16539)
+-- TOC entry 231 (class 1259 OID 16808)
+-- Name: agent_status; Type: TABLE; Schema: public; Owner: avnadmin
+--
+
+CREATE TABLE public.agent_status (
+    agent_id uuid NOT NULL,
+    status character varying(20) DEFAULT 'offline'::character varying,
+    active_tickets_count integer DEFAULT 0,
+    last_activity timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now(),
+    CONSTRAINT agent_status_active_tickets_count_check CHECK (((active_tickets_count >= 0) AND (active_tickets_count <= 2))),
+    CONSTRAINT agent_status_status_check CHECK (((status)::text = ANY ((ARRAY['online'::character varying, 'offline'::character varying, 'busy'::character varying])::text[])))
+);
+
+
+ALTER TABLE public.agent_status OWNER TO avnadmin;
+
+--
+-- TOC entry 227 (class 1259 OID 16539)
 -- Name: driver_actions; Type: TABLE; Schema: public; Owner: avnadmin
 --
 
@@ -133,7 +234,7 @@ CREATE TABLE public.driver_vehicles (
     category character varying(50) NOT NULL,
     fuel_type character varying(50) NOT NULL,
     CONSTRAINT driver_vehicles_category_check CHECK (((category)::text = ANY (ARRAY[('bike'::character varying)::text, ('auto'::character varying)::text, ('car'::character varying)::text, ('commercial'::character varying)::text]))),
-    CONSTRAINT driver_vehicles_fuel_type_check CHECK (((fuel_type)::text = ANY (ARRAY[('petrol'::character varying)::text, ('diesel'::character varying)::text, ('electric'::character varying)::text, ('cng'::character varying)::text])))
+    CONSTRAINT driver_vehicles_fuel_type_check CHECK (((fuel_type)::text = ANY (ARRAY[('petrol'::character varying)::text, ('diesel'::character varying)::text, ('electric'::character varying)::text, ('cng'::character varying)::text, ('hybrid'::character varying)::text])))
 );
 
 
@@ -158,7 +259,7 @@ CREATE TABLE public.drivers (
 ALTER TABLE public.drivers OWNER TO avnadmin;
 
 --
--- TOC entry 229 (class 1259 OID 16724)
+-- TOC entry 228 (class 1259 OID 16724)
 -- Name: platform_staff; Type: TABLE; Schema: public; Owner: avnadmin
 --
 
@@ -206,21 +307,89 @@ CREATE TABLE public.rides (
 ALTER TABLE public.rides OWNER TO avnadmin;
 
 --
--- TOC entry 227 (class 1259 OID 16532)
+-- TOC entry 233 (class 1259 OID 16861)
+-- Name: servicable_cities; Type: TABLE; Schema: public; Owner: avnadmin
+--
+
+CREATE TABLE public.servicable_cities (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    city_name character varying(100) NOT NULL,
+    status character varying(20) DEFAULT 'active'::character varying NOT NULL,
+    launch_date date,
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now(),
+    CONSTRAINT servicable_cities_status_check CHECK (((status)::text = ANY (ARRAY[('active'::character varying)::text, ('inactive'::character varying)::text, ('coming_soon'::character varying)::text])))
+);
+
+
+ALTER TABLE public.servicable_cities OWNER TO avnadmin;
+
+--
+-- TOC entry 229 (class 1259 OID 16762)
 -- Name: support_tickets; Type: TABLE; Schema: public; Owner: avnadmin
 --
 
 CREATE TABLE public.support_tickets (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
-    created_by_agent_id uuid NOT NULL,
+    customer_id uuid NOT NULL,
+    assigned_agent_id uuid,
+    city character varying(100) NOT NULL,
     subject character varying(255) NOT NULL,
-    status character varying(50) DEFAULT 'open'::character varying NOT NULL,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT support_tickets_status_check CHECK (((status)::text = ANY (ARRAY[('open'::character varying)::text, ('pending_admin'::character varying)::text, ('resolved'::character varying)::text])))
+    description text NOT NULL,
+    priority character varying(20) DEFAULT 'normal'::character varying,
+    type character varying(50) DEFAULT 'text'::character varying,
+    status character varying(50) DEFAULT 'open'::character varying,
+    created_at timestamp with time zone DEFAULT now(),
+    assigned_at timestamp with time zone,
+    resolved_at timestamp with time zone,
+    closed_at timestamp with time zone,
+    created_by_agent_id uuid,
+    CONSTRAINT support_tickets_priority_check CHECK (((priority)::text = ANY ((ARRAY['low'::character varying, 'normal'::character varying, 'high'::character varying, 'urgent'::character varying])::text[]))),
+    CONSTRAINT support_tickets_status_check CHECK (((status)::text = ANY ((ARRAY['open'::character varying, 'in_progress'::character varying, 'pending_customer'::character varying, 'resolved'::character varying, 'closed'::character varying])::text[]))),
+    CONSTRAINT support_tickets_type_check CHECK (((type)::text = ANY ((ARRAY['text'::character varying, 'voice_call'::character varying])::text[])))
 );
 
 
 ALTER TABLE public.support_tickets OWNER TO avnadmin;
+
+--
+-- TOC entry 232 (class 1259 OID 16824)
+-- Name: ticket_assignments; Type: TABLE; Schema: public; Owner: avnadmin
+--
+
+CREATE TABLE public.ticket_assignments (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    ticket_id uuid NOT NULL,
+    agent_id uuid,
+    assigned_by uuid,
+    assignment_type character varying(20),
+    assigned_at timestamp with time zone DEFAULT now(),
+    unassigned_at timestamp with time zone,
+    CONSTRAINT ticket_assignments_assignment_type_check CHECK (((assignment_type)::text = ANY ((ARRAY['automatic'::character varying, 'manual'::character varying])::text[])))
+);
+
+
+ALTER TABLE public.ticket_assignments OWNER TO avnadmin;
+
+--
+-- TOC entry 230 (class 1259 OID 16792)
+-- Name: ticket_messages; Type: TABLE; Schema: public; Owner: avnadmin
+--
+
+CREATE TABLE public.ticket_messages (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    ticket_id uuid NOT NULL,
+    sender_id uuid NOT NULL,
+    sender_type character varying(20) NOT NULL,
+    message text NOT NULL,
+    is_internal boolean DEFAULT false,
+    attachments jsonb,
+    created_at timestamp with time zone DEFAULT now(),
+    CONSTRAINT ticket_messages_sender_type_check CHECK (((sender_type)::text = ANY ((ARRAY['customer'::character varying, 'agent'::character varying])::text[])))
+);
+
+
+ALTER TABLE public.ticket_messages OWNER TO avnadmin;
 
 --
 -- TOC entry 224 (class 1259 OID 16512)
@@ -283,7 +452,16 @@ CREATE TABLE public.wallets (
 ALTER TABLE public.wallets OWNER TO avnadmin;
 
 --
--- TOC entry 4406 (class 2606 OID 16568)
+-- TOC entry 4460 (class 2606 OID 16818)
+-- Name: agent_status agent_status_pkey; Type: CONSTRAINT; Schema: public; Owner: avnadmin
+--
+
+ALTER TABLE ONLY public.agent_status
+    ADD CONSTRAINT agent_status_pkey PRIMARY KEY (agent_id);
+
+
+--
+-- TOC entry 4443 (class 2606 OID 16568)
 -- Name: driver_actions driver_actions_pkey; Type: CONSTRAINT; Schema: public; Owner: avnadmin
 --
 
@@ -292,7 +470,7 @@ ALTER TABLE ONLY public.driver_actions
 
 
 --
--- TOC entry 4384 (class 2606 OID 16552)
+-- TOC entry 4423 (class 2606 OID 16552)
 -- Name: driver_documents driver_documents_pkey; Type: CONSTRAINT; Schema: public; Owner: avnadmin
 --
 
@@ -301,7 +479,7 @@ ALTER TABLE ONLY public.driver_documents
 
 
 --
--- TOC entry 4400 (class 2606 OID 16562)
+-- TOC entry 4439 (class 2606 OID 16562)
 -- Name: driver_ledger driver_ledger_pkey; Type: CONSTRAINT; Schema: public; Owner: avnadmin
 --
 
@@ -310,7 +488,7 @@ ALTER TABLE ONLY public.driver_ledger
 
 
 --
--- TOC entry 4402 (class 2606 OID 16564)
+-- TOC entry 4441 (class 2606 OID 16564)
 -- Name: driver_payouts driver_payouts_pkey; Type: CONSTRAINT; Schema: public; Owner: avnadmin
 --
 
@@ -319,7 +497,7 @@ ALTER TABLE ONLY public.driver_payouts
 
 
 --
--- TOC entry 4386 (class 2606 OID 16576)
+-- TOC entry 4425 (class 2606 OID 16576)
 -- Name: driver_vehicles driver_vehicles_driver_id_key; Type: CONSTRAINT; Schema: public; Owner: avnadmin
 --
 
@@ -328,7 +506,7 @@ ALTER TABLE ONLY public.driver_vehicles
 
 
 --
--- TOC entry 4388 (class 2606 OID 16554)
+-- TOC entry 4427 (class 2606 OID 16554)
 -- Name: driver_vehicles driver_vehicles_pkey; Type: CONSTRAINT; Schema: public; Owner: avnadmin
 --
 
@@ -337,7 +515,7 @@ ALTER TABLE ONLY public.driver_vehicles
 
 
 --
--- TOC entry 4390 (class 2606 OID 16578)
+-- TOC entry 4429 (class 2606 OID 16578)
 -- Name: driver_vehicles driver_vehicles_registration_number_key; Type: CONSTRAINT; Schema: public; Owner: avnadmin
 --
 
@@ -346,7 +524,7 @@ ALTER TABLE ONLY public.driver_vehicles
 
 
 --
--- TOC entry 4380 (class 2606 OID 16550)
+-- TOC entry 4419 (class 2606 OID 16550)
 -- Name: drivers drivers_pkey; Type: CONSTRAINT; Schema: public; Owner: avnadmin
 --
 
@@ -355,7 +533,7 @@ ALTER TABLE ONLY public.drivers
 
 
 --
--- TOC entry 4382 (class 2606 OID 16574)
+-- TOC entry 4421 (class 2606 OID 16574)
 -- Name: drivers drivers_user_id_key; Type: CONSTRAINT; Schema: public; Owner: avnadmin
 --
 
@@ -364,7 +542,7 @@ ALTER TABLE ONLY public.drivers
 
 
 --
--- TOC entry 4408 (class 2606 OID 16738)
+-- TOC entry 4445 (class 2606 OID 16738)
 -- Name: platform_staff platform_staff_email_key; Type: CONSTRAINT; Schema: public; Owner: avnadmin
 --
 
@@ -373,7 +551,7 @@ ALTER TABLE ONLY public.platform_staff
 
 
 --
--- TOC entry 4410 (class 2606 OID 16736)
+-- TOC entry 4447 (class 2606 OID 16736)
 -- Name: platform_staff platform_staff_pkey; Type: CONSTRAINT; Schema: public; Owner: avnadmin
 --
 
@@ -382,7 +560,7 @@ ALTER TABLE ONLY public.platform_staff
 
 
 --
--- TOC entry 4392 (class 2606 OID 16556)
+-- TOC entry 4431 (class 2606 OID 16556)
 -- Name: rides rides_pkey; Type: CONSTRAINT; Schema: public; Owner: avnadmin
 --
 
@@ -391,7 +569,25 @@ ALTER TABLE ONLY public.rides
 
 
 --
--- TOC entry 4404 (class 2606 OID 16566)
+-- TOC entry 4468 (class 2606 OID 16872)
+-- Name: servicable_cities servicable_cities_city_name_key; Type: CONSTRAINT; Schema: public; Owner: avnadmin
+--
+
+ALTER TABLE ONLY public.servicable_cities
+    ADD CONSTRAINT servicable_cities_city_name_key UNIQUE (city_name);
+
+
+--
+-- TOC entry 4470 (class 2606 OID 16870)
+-- Name: servicable_cities servicable_cities_pkey; Type: CONSTRAINT; Schema: public; Owner: avnadmin
+--
+
+ALTER TABLE ONLY public.servicable_cities
+    ADD CONSTRAINT servicable_cities_pkey PRIMARY KEY (id);
+
+
+--
+-- TOC entry 4454 (class 2606 OID 16776)
 -- Name: support_tickets support_tickets_pkey; Type: CONSTRAINT; Schema: public; Owner: avnadmin
 --
 
@@ -400,7 +596,25 @@ ALTER TABLE ONLY public.support_tickets
 
 
 --
--- TOC entry 4398 (class 2606 OID 16560)
+-- TOC entry 4466 (class 2606 OID 16831)
+-- Name: ticket_assignments ticket_assignments_pkey; Type: CONSTRAINT; Schema: public; Owner: avnadmin
+--
+
+ALTER TABLE ONLY public.ticket_assignments
+    ADD CONSTRAINT ticket_assignments_pkey PRIMARY KEY (id);
+
+
+--
+-- TOC entry 4458 (class 2606 OID 16802)
+-- Name: ticket_messages ticket_messages_pkey; Type: CONSTRAINT; Schema: public; Owner: avnadmin
+--
+
+ALTER TABLE ONLY public.ticket_messages
+    ADD CONSTRAINT ticket_messages_pkey PRIMARY KEY (id);
+
+
+--
+-- TOC entry 4437 (class 2606 OID 16560)
 -- Name: transactions transactions_pkey; Type: CONSTRAINT; Schema: public; Owner: avnadmin
 --
 
@@ -409,7 +623,7 @@ ALTER TABLE ONLY public.transactions
 
 
 --
--- TOC entry 4374 (class 2606 OID 16572)
+-- TOC entry 4413 (class 2606 OID 16572)
 -- Name: users users_email_key; Type: CONSTRAINT; Schema: public; Owner: avnadmin
 --
 
@@ -418,7 +632,7 @@ ALTER TABLE ONLY public.users
 
 
 --
--- TOC entry 4376 (class 2606 OID 16570)
+-- TOC entry 4415 (class 2606 OID 16570)
 -- Name: users users_phone_number_key; Type: CONSTRAINT; Schema: public; Owner: avnadmin
 --
 
@@ -427,7 +641,7 @@ ALTER TABLE ONLY public.users
 
 
 --
--- TOC entry 4378 (class 2606 OID 16548)
+-- TOC entry 4417 (class 2606 OID 16548)
 -- Name: users users_pkey; Type: CONSTRAINT; Schema: public; Owner: avnadmin
 --
 
@@ -436,7 +650,7 @@ ALTER TABLE ONLY public.users
 
 
 --
--- TOC entry 4394 (class 2606 OID 16558)
+-- TOC entry 4433 (class 2606 OID 16558)
 -- Name: wallets wallets_pkey; Type: CONSTRAINT; Schema: public; Owner: avnadmin
 --
 
@@ -445,7 +659,7 @@ ALTER TABLE ONLY public.wallets
 
 
 --
--- TOC entry 4396 (class 2606 OID 16580)
+-- TOC entry 4435 (class 2606 OID 16580)
 -- Name: wallets wallets_user_id_key; Type: CONSTRAINT; Schema: public; Owner: avnadmin
 --
 
@@ -454,7 +668,112 @@ ALTER TABLE ONLY public.wallets
 
 
 --
--- TOC entry 4423 (class 2606 OID 16641)
+-- TOC entry 4461 (class 1259 OID 16855)
+-- Name: idx_agent_status_active_tickets; Type: INDEX; Schema: public; Owner: avnadmin
+--
+
+CREATE INDEX idx_agent_status_active_tickets ON public.agent_status USING btree (active_tickets_count);
+
+
+--
+-- TOC entry 4462 (class 1259 OID 16854)
+-- Name: idx_agent_status_status; Type: INDEX; Schema: public; Owner: avnadmin
+--
+
+CREATE INDEX idx_agent_status_status ON public.agent_status USING btree (status);
+
+
+--
+-- TOC entry 4448 (class 1259 OID 16849)
+-- Name: idx_support_tickets_assigned_agent; Type: INDEX; Schema: public; Owner: avnadmin
+--
+
+CREATE INDEX idx_support_tickets_assigned_agent ON public.support_tickets USING btree (assigned_agent_id);
+
+
+--
+-- TOC entry 4449 (class 1259 OID 16847)
+-- Name: idx_support_tickets_city; Type: INDEX; Schema: public; Owner: avnadmin
+--
+
+CREATE INDEX idx_support_tickets_city ON public.support_tickets USING btree (city);
+
+
+--
+-- TOC entry 4450 (class 1259 OID 16851)
+-- Name: idx_support_tickets_created_at; Type: INDEX; Schema: public; Owner: avnadmin
+--
+
+CREATE INDEX idx_support_tickets_created_at ON public.support_tickets USING btree (created_at);
+
+
+--
+-- TOC entry 4451 (class 1259 OID 16850)
+-- Name: idx_support_tickets_priority; Type: INDEX; Schema: public; Owner: avnadmin
+--
+
+CREATE INDEX idx_support_tickets_priority ON public.support_tickets USING btree (priority);
+
+
+--
+-- TOC entry 4452 (class 1259 OID 16848)
+-- Name: idx_support_tickets_status; Type: INDEX; Schema: public; Owner: avnadmin
+--
+
+CREATE INDEX idx_support_tickets_status ON public.support_tickets USING btree (status);
+
+
+--
+-- TOC entry 4463 (class 1259 OID 16857)
+-- Name: idx_ticket_assignments_agent_id; Type: INDEX; Schema: public; Owner: avnadmin
+--
+
+CREATE INDEX idx_ticket_assignments_agent_id ON public.ticket_assignments USING btree (agent_id);
+
+
+--
+-- TOC entry 4464 (class 1259 OID 16856)
+-- Name: idx_ticket_assignments_ticket_id; Type: INDEX; Schema: public; Owner: avnadmin
+--
+
+CREATE INDEX idx_ticket_assignments_ticket_id ON public.ticket_assignments USING btree (ticket_id);
+
+
+--
+-- TOC entry 4455 (class 1259 OID 16853)
+-- Name: idx_ticket_messages_created_at; Type: INDEX; Schema: public; Owner: avnadmin
+--
+
+CREATE INDEX idx_ticket_messages_created_at ON public.ticket_messages USING btree (created_at);
+
+
+--
+-- TOC entry 4456 (class 1259 OID 16852)
+-- Name: idx_ticket_messages_ticket_id; Type: INDEX; Schema: public; Owner: avnadmin
+--
+
+CREATE INDEX idx_ticket_messages_ticket_id ON public.ticket_messages USING btree (ticket_id);
+
+
+--
+-- TOC entry 4493 (class 2620 OID 16859)
+-- Name: support_tickets trigger_update_agent_ticket_count; Type: TRIGGER; Schema: public; Owner: avnadmin
+--
+
+CREATE TRIGGER trigger_update_agent_ticket_count AFTER INSERT OR UPDATE ON public.support_tickets FOR EACH ROW EXECUTE FUNCTION public.update_agent_ticket_count();
+
+
+--
+-- TOC entry 4489 (class 2606 OID 16819)
+-- Name: agent_status agent_status_agent_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: avnadmin
+--
+
+ALTER TABLE ONLY public.agent_status
+    ADD CONSTRAINT agent_status_agent_id_fkey FOREIGN KEY (agent_id) REFERENCES public.platform_staff(id) ON DELETE CASCADE;
+
+
+--
+-- TOC entry 4482 (class 2606 OID 16641)
 -- Name: driver_actions driver_actions_agent_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: avnadmin
 --
 
@@ -463,7 +782,7 @@ ALTER TABLE ONLY public.driver_actions
 
 
 --
--- TOC entry 4424 (class 2606 OID 16646)
+-- TOC entry 4483 (class 2606 OID 16646)
 -- Name: driver_actions driver_actions_driver_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: avnadmin
 --
 
@@ -472,7 +791,7 @@ ALTER TABLE ONLY public.driver_actions
 
 
 --
--- TOC entry 4412 (class 2606 OID 16586)
+-- TOC entry 4472 (class 2606 OID 16586)
 -- Name: driver_documents driver_documents_driver_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: avnadmin
 --
 
@@ -481,7 +800,7 @@ ALTER TABLE ONLY public.driver_documents
 
 
 --
--- TOC entry 4419 (class 2606 OID 16621)
+-- TOC entry 4479 (class 2606 OID 16621)
 -- Name: driver_ledger driver_ledger_driver_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: avnadmin
 --
 
@@ -490,7 +809,7 @@ ALTER TABLE ONLY public.driver_ledger
 
 
 --
--- TOC entry 4420 (class 2606 OID 16626)
+-- TOC entry 4480 (class 2606 OID 16626)
 -- Name: driver_ledger driver_ledger_ride_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: avnadmin
 --
 
@@ -499,7 +818,7 @@ ALTER TABLE ONLY public.driver_ledger
 
 
 --
--- TOC entry 4421 (class 2606 OID 16631)
+-- TOC entry 4481 (class 2606 OID 16631)
 -- Name: driver_payouts driver_payouts_driver_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: avnadmin
 --
 
@@ -508,7 +827,7 @@ ALTER TABLE ONLY public.driver_payouts
 
 
 --
--- TOC entry 4413 (class 2606 OID 16591)
+-- TOC entry 4473 (class 2606 OID 16591)
 -- Name: driver_vehicles driver_vehicles_driver_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: avnadmin
 --
 
@@ -517,7 +836,7 @@ ALTER TABLE ONLY public.driver_vehicles
 
 
 --
--- TOC entry 4411 (class 2606 OID 16581)
+-- TOC entry 4471 (class 2606 OID 16581)
 -- Name: drivers drivers_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: avnadmin
 --
 
@@ -526,7 +845,7 @@ ALTER TABLE ONLY public.drivers
 
 
 --
--- TOC entry 4425 (class 2606 OID 16746)
+-- TOC entry 4484 (class 2606 OID 16746)
 -- Name: platform_staff platform_staff_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: avnadmin
 --
 
@@ -535,7 +854,7 @@ ALTER TABLE ONLY public.platform_staff
 
 
 --
--- TOC entry 4414 (class 2606 OID 16596)
+-- TOC entry 4474 (class 2606 OID 16596)
 -- Name: rides rides_customer_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: avnadmin
 --
 
@@ -544,7 +863,7 @@ ALTER TABLE ONLY public.rides
 
 
 --
--- TOC entry 4415 (class 2606 OID 16601)
+-- TOC entry 4475 (class 2606 OID 16601)
 -- Name: rides rides_driver_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: avnadmin
 --
 
@@ -553,16 +872,70 @@ ALTER TABLE ONLY public.rides
 
 
 --
--- TOC entry 4422 (class 2606 OID 16636)
+-- TOC entry 4485 (class 2606 OID 16782)
+-- Name: support_tickets support_tickets_assigned_agent_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: avnadmin
+--
+
+ALTER TABLE ONLY public.support_tickets
+    ADD CONSTRAINT support_tickets_assigned_agent_id_fkey FOREIGN KEY (assigned_agent_id) REFERENCES public.platform_staff(id);
+
+
+--
+-- TOC entry 4486 (class 2606 OID 16787)
 -- Name: support_tickets support_tickets_created_by_agent_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: avnadmin
 --
 
 ALTER TABLE ONLY public.support_tickets
-    ADD CONSTRAINT support_tickets_created_by_agent_id_fkey FOREIGN KEY (created_by_agent_id) REFERENCES public.users(id);
+    ADD CONSTRAINT support_tickets_created_by_agent_id_fkey FOREIGN KEY (created_by_agent_id) REFERENCES public.platform_staff(id);
 
 
 --
--- TOC entry 4417 (class 2606 OID 16616)
+-- TOC entry 4487 (class 2606 OID 16777)
+-- Name: support_tickets support_tickets_customer_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: avnadmin
+--
+
+ALTER TABLE ONLY public.support_tickets
+    ADD CONSTRAINT support_tickets_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.users(id);
+
+
+--
+-- TOC entry 4490 (class 2606 OID 16837)
+-- Name: ticket_assignments ticket_assignments_agent_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: avnadmin
+--
+
+ALTER TABLE ONLY public.ticket_assignments
+    ADD CONSTRAINT ticket_assignments_agent_id_fkey FOREIGN KEY (agent_id) REFERENCES public.platform_staff(id);
+
+
+--
+-- TOC entry 4491 (class 2606 OID 16842)
+-- Name: ticket_assignments ticket_assignments_assigned_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: avnadmin
+--
+
+ALTER TABLE ONLY public.ticket_assignments
+    ADD CONSTRAINT ticket_assignments_assigned_by_fkey FOREIGN KEY (assigned_by) REFERENCES public.platform_staff(id);
+
+
+--
+-- TOC entry 4492 (class 2606 OID 16832)
+-- Name: ticket_assignments ticket_assignments_ticket_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: avnadmin
+--
+
+ALTER TABLE ONLY public.ticket_assignments
+    ADD CONSTRAINT ticket_assignments_ticket_id_fkey FOREIGN KEY (ticket_id) REFERENCES public.support_tickets(id) ON DELETE CASCADE;
+
+
+--
+-- TOC entry 4488 (class 2606 OID 16803)
+-- Name: ticket_messages ticket_messages_ticket_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: avnadmin
+--
+
+ALTER TABLE ONLY public.ticket_messages
+    ADD CONSTRAINT ticket_messages_ticket_id_fkey FOREIGN KEY (ticket_id) REFERENCES public.support_tickets(id) ON DELETE CASCADE;
+
+
+--
+-- TOC entry 4477 (class 2606 OID 16616)
 -- Name: transactions transactions_ride_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: avnadmin
 --
 
@@ -571,7 +944,7 @@ ALTER TABLE ONLY public.transactions
 
 
 --
--- TOC entry 4418 (class 2606 OID 16611)
+-- TOC entry 4478 (class 2606 OID 16611)
 -- Name: transactions transactions_wallet_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: avnadmin
 --
 
@@ -580,7 +953,7 @@ ALTER TABLE ONLY public.transactions
 
 
 --
--- TOC entry 4416 (class 2606 OID 16606)
+-- TOC entry 4476 (class 2606 OID 16606)
 -- Name: wallets wallets_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: avnadmin
 --
 
@@ -588,11 +961,11 @@ ALTER TABLE ONLY public.wallets
     ADD CONSTRAINT wallets_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id);
 
 
--- Completed on 2025-09-13 20:49:03
+-- Completed on 2025-09-27 13:13:07
 
 --
 -- PostgreSQL database dump complete
 --
 
-\unrestrict n7etftg5NYxiuGh3KBkX0e1lN6yepn2JLGjbkMfeo6i8WYJsHlnOCTHnEP9te31
+\unrestrict 7Jgl6dBHbTsH1T7jFyZ8aqUzD3MdvMumSRkOWdGHxlH3fKSHGJEFrpsPV9UKsM3
 

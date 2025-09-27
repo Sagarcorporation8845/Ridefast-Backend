@@ -17,6 +17,7 @@ const DRIVER_SERVICE_URL = 'http://localhost:3002';
 const SUPPORT_SERVICE_URL = 'http://localhost:3003';
 const ADMIN_SERVICE_URL = 'http://localhost:3004';
 const VERIFICATION_SERVICE_URL = 'http://localhost:3005'; // Add this line
+const RIDE_SERVICE_URL = 'http://localhost:3006';
 
 
 // --- Middleware ---
@@ -51,7 +52,9 @@ app.get('/', (req, res) => {
             'driver-service': '/driver-service', 
             'support-service': '/support-service',
             'admin-service': '/admin-service',
-            'verification-service': '/verification-service'
+            'verification-service': '/verification-service',
+            'ride-service': '/ride-service'
+
         },
         timestamp: new Date().toISOString()
     });

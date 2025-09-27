@@ -63,6 +63,11 @@ jobs:
             cd ../verification-service
             npm install
             
+            # Install/update dependencies for the ride-service
+            echo "Installing ride-service dependencies..."
+            cd ../ride-service
+            npm install
+            
             # Go back to the root project directory
             cd ../..
 

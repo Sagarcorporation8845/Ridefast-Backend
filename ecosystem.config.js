@@ -43,6 +43,13 @@ module.exports = {
       env: {
         PORT: process.env.VERIFICATION_SERVICE_PORT || 3005
       }
+    }, {
+      name   : "ride-service",
+      script : "./packages/ride-service/index.js",
+      watch: false,
+      env: {
+        PORT: process.env.RIDE_SERVICE_PORT || 3006
+      }
     } ]
   }
 
