@@ -8,7 +8,7 @@ const path = require('path');
 
 const router = express.Router();
 
-// --- SECURED ENDPOINT: Get Active Cities (FIX APPLIED) ---
+// --- SECURED ENDPOINT: Get Active Cities ---
 router.get('/cities', tokenVerify, async (req, res) => {
     try {
         const { rows } = await db.query(
@@ -22,13 +22,14 @@ router.get('/cities', tokenVerify, async (req, res) => {
 });
 
 
-// --- Personal Details Endpoint (With Full Name & City Validation) ---
+// --- Personal Details Endpoint (With Full Name, City, Email, DOB, and Gender Validation) ---
 router.post('/personal-details', tokenVerify, async (req, res) => {
-    let { fullName, city } = req.body;
+    let { fullName, city, email, dob, gender } = req.body;
     const userId = req.user.userId;
 
-    if (!fullName || !city) {
-        return res.status(400).json({ message: 'Full name and city are required.' });
+    // --- Validation for all fields ---
+    if (!fullName || !city || !email || !dob || !gender) {
+        return res.status(400).json({ message: 'Full name, city, email, date of birth, and gender are required.' });
     }
 
     const nameRegex = /^[a-zA-Z\s]+$/;
@@ -36,6 +37,16 @@ router.post('/personal-details', tokenVerify, async (req, res) => {
         return res.status(400).json({ message: 'Full name can only contain letters and spaces.' });
     }
     fullName = fullName.trim();
+
+    if (!/\S+@\S+\.\S+/.test(email)) {
+        return res.status(400).json({ message: 'Invalid email format.' });
+    }
+
+    const dobRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dobRegex.test(dob)) {
+        return res.status(400).json({ message: 'Invalid date of birth format. Please use YYYY-MM-DD.' });
+    }
+    // --- End Validation ---
     
     const standardizedCity = city.trim().toLowerCase();
 
@@ -49,7 +60,10 @@ router.post('/personal-details', tokenVerify, async (req, res) => {
             return res.status(400).json({ message: 'Sorry, we do not currently operate in this city.' });
         }
 
-        await db.query('UPDATE users SET full_name = $1 WHERE id = $2', [fullName, userId]);
+        await db.query(
+            'UPDATE users SET full_name = $1, email = $2, date_of_birth = $3, gender = $4 WHERE id = $5',
+            [fullName, email, dob, gender, userId]
+        );
         const { rows } = await db.query(
             'INSERT INTO drivers (user_id, city) VALUES ($1, $2) RETURNING id',
             [userId, standardizedCity]
@@ -63,6 +77,9 @@ router.post('/personal-details', tokenVerify, async (req, res) => {
 
     } catch (err) {
         if (err.code === '23505') { 
+            if (err.constraint === 'users_email_key') {
+                return res.status(409).json({ message: 'An account with this email address already exists.' });
+            }
             const { rows } = await db.query('SELECT id FROM drivers WHERE user_id = $1', [userId]);
             if (rows.length > 0) {
                  return res.status(200).json({ 
@@ -84,7 +101,7 @@ router.post('/vehicle-details', tokenVerify, async (req, res) => {
     const userId = req.user.userId; 
 
     const allowedVehicleTypes = ['bike', 'auto', 'car', 'commercial'];
-    const allowedFuelTypes = ['electric', 'petrol', 'diesel', 'hybrid', 'cng' ];
+    const allowedFuelTypes = ['electric', 'petrol', 'diesel', 'hybrid', 'cng'];
 
     if (!vehicleType || !registrationNumber || !modelName || !fuelType) {
         return res.status(400).json({ message: 'All vehicle fields are required.' });
@@ -96,9 +113,8 @@ router.post('/vehicle-details', tokenVerify, async (req, res) => {
         return res.status(400).json({ message: `Invalid fuel type.` });
     }
 
-    // Convert to uppercase and remove spaces and hyphens
     const standardizedRegNumber = registrationNumber.replace(/[\s-]/g, '').toUpperCase();
-
+    
     // Indian vehicle number plate validation regex
     const registrationNumberRegex = /^[A-Z]{2}[0-9]{2}[A-Z]{2}[0-9]{4}$/;
     if (!registrationNumberRegex.test(standardizedRegNumber)) {

@@ -57,12 +57,19 @@ router.put('/update', tokenVerify, async (req, res) => {
   const { fullName, email, dob, gender } = req.body;
   const userId = req.user.userId;
 
+  // --- Validation for all fields ---
   if (!fullName || !email || !dob || !gender) {
     return res.status(400).json({ message: 'All fields are required.' });
   }
   if (!/\S+@\S+\.\S+/.test(email)) {
     return res.status(400).json({ message: 'Invalid email format.' });
   }
+
+  const dobRegex = /^\d{4}-\d{2}-\d{2}$/;
+  if (!dobRegex.test(dob)) {
+      return res.status(400).json({ message: 'Invalid date of birth format. Please use YYYY-MM-DD.' });
+  }
+  // --- End Validation ---
 
   try {
     const query = `
