@@ -27,7 +27,6 @@ router.post('/personal-details', tokenVerify, async (req, res) => {
     let { fullName, city, email, dob, gender } = req.body;
     const userId = req.user.userId;
 
-    // --- Validation for all fields ---
     if (!fullName || !city || !email || !dob || !gender) {
         return res.status(400).json({ message: 'Full name, city, email, date of birth, and gender are required.' });
     }
@@ -41,13 +40,12 @@ router.post('/personal-details', tokenVerify, async (req, res) => {
     if (!/\S+@\S+\.\S+/.test(email)) {
         return res.status(400).json({ message: 'Invalid email format.' });
     }
-
+    
     const dobRegex = /^\d{4}-\d{2}-\d{2}$/;
     if (!dobRegex.test(dob)) {
         return res.status(400).json({ message: 'Invalid date of birth format. Please use YYYY-MM-DD.' });
     }
-    // --- End Validation ---
-    
+
     const standardizedCity = city.trim().toLowerCase();
 
     try {
@@ -115,7 +113,6 @@ router.post('/vehicle-details', tokenVerify, async (req, res) => {
 
     const standardizedRegNumber = registrationNumber.replace(/[\s-]/g, '').toUpperCase();
     
-    // Indian vehicle number plate validation regex
     const registrationNumberRegex = /^[A-Z]{2}[0-9]{2}[A-Z]{2}[0-9]{4}$/;
     if (!registrationNumberRegex.test(standardizedRegNumber)) {
         return res.status(400).json({ message: 'Please enter a correct vehicle number. Follow this format: MH01AB1234' });
@@ -215,6 +212,14 @@ async function _handleDocumentUpload(req, res) {
         fs.unlinkSync(req.file.path);
         return res.status(400).json({ message: 'documentType is required.' });
     }
+
+    // --- ADDED VALIDATION ---
+    const allowedDocumentTypes = ['license', 'rc', 'photo', 'aadhaar'];
+    if (!allowedDocumentTypes.includes(documentType.toLowerCase())) {
+        fs.unlinkSync(req.file.path); // Clean up the uploaded file
+        return res.status(400).json({ message: 'Invalid documentType. Must be one of: license, rc, photo, aadhaar' });
+    }
+    // --- END ADDED VALIDATION ----
 
     const fileUrl = `/uploads/${driverId}/${req.file.filename}`;
 
