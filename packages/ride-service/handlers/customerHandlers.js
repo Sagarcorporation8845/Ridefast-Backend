@@ -35,7 +35,6 @@ const findDriversWithDynamicRadius = async (geoKey, longitude, latitude) => {
  * provided coordinates before finding and categorizing vehicles.
  */
 const findNearbyDrivers = async (req, res) => {
-  // --- FIX: 'city' is no longer required from the client ---
   const { latitude, longitude } = req.query;
 
   if (!latitude || !longitude) {
@@ -43,18 +42,15 @@ const findNearbyDrivers = async (req, res) => {
   }
 
   try {
-    // 1. Get all active city names from the database to know where we can search
     const citiesResult = await db.query("SELECT city_name FROM servicable_cities WHERE status = 'active'");
     if (citiesResult.rows.length === 0) {
       return res.status(404).json({ message: "No serviceable cities are active in the system." });
     }
     const activeCities = citiesResult.rows.map(row => row.city_name);
 
-    // 2. Determine which city the user is in by checking Redis
     let cityOfSearch = null;
     for (const city of activeCities) {
       const geoKey = `online_drivers:${city}`;
-      // Check for just ONE driver within a large radius (e.g., 50km) to quickly identify the correct city
       const result = await redisClient.geoSearch(geoKey, 
         { longitude: parseFloat(longitude), latitude: parseFloat(latitude) }, 
         { radius: 50, unit: 'km' }, 
@@ -62,7 +58,7 @@ const findNearbyDrivers = async (req, res) => {
       );
       if (result.length > 0) {
         cityOfSearch = city;
-        break; // Found the city, no need to check others
+        break;
       }
     }
 
@@ -70,7 +66,6 @@ const findNearbyDrivers = async (req, res) => {
       return res.status(200).json({ message: 'It seems you are outside our service area. No drivers found.', vehicles: {} });
     }
 
-    // 3. Now that we have the correct city, find a good number of drivers with the dynamic radius logic
     const finalGeoKey = `online_drivers:${cityOfSearch}`;
     const nearbyDriverIds = await findDriversWithDynamicRadius(finalGeoKey, parseFloat(longitude), parseFloat(latitude));
 
@@ -78,7 +73,6 @@ const findNearbyDrivers = async (req, res) => {
       return res.status(200).json({ message: 'No drivers found nearby.', vehicles: {} });
     }
 
-    // 4. Fetch vehicle details for the found drivers from PostgreSQL
     const query = `
       SELECT
         d.id as driver_id,
@@ -90,7 +84,6 @@ const findNearbyDrivers = async (req, res) => {
     `;
     const { rows: vehicleDetails } = await db.query(query, [nearbyDriverIds]);
     
-    // 5. Categorize vehicles and format the response
     const categorizedVehicles = {};
 
     for (const driverId of nearbyDriverIds) {
@@ -100,7 +93,10 @@ const findNearbyDrivers = async (req, res) => {
       const driverLocation = await redisClient.geoPos(finalGeoKey, driverId);
       if (!driverLocation || !driverLocation[0]) continue;
 
+      // --- FIX: Add driverId to the response object ---
+      // The Android app will use this ID to manage the map marker.
       const locationData = {
+          driverId: driverId, // Unique identifier for the marker
           latitude: parseFloat(driverLocation[0].latitude),
           longitude: parseFloat(driverLocation[0].longitude)
       };
