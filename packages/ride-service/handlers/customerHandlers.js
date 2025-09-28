@@ -20,12 +20,10 @@ const findDriversWithDynamicRadius = async (geoKey, longitude, latitude) => {
     while (radius <= maxRadius) {
         drivers = await redisClient.geoSearch(geoKey, { longitude, latitude }, { radius, unit: 'km' });
         
-        // If we find enough drivers or have hit the max radius, stop searching
         if (drivers.length >= minDrivers || radius >= maxRadius) {
             break;
         }
 
-        // Otherwise, double the radius for the next search attempt
         radius *= 2;
     }
 
@@ -33,27 +31,54 @@ const findDriversWithDynamicRadius = async (geoKey, longitude, latitude) => {
 };
 
 /**
- * @desc Finds nearby online drivers and categorizes them by vehicle type
- * and sub-category for the customer app.
+ * @desc Finds nearby online drivers. It automatically determines the city from the 
+ * provided coordinates before finding and categorizing vehicles.
  */
 const findNearbyDrivers = async (req, res) => {
-  const { latitude, longitude, city } = req.query;
+  // --- FIX: 'city' is no longer required from the client ---
+  const { latitude, longitude } = req.query;
 
-  if (!latitude || !longitude || !city) {
-    return res.status(400).json({ message: 'latitude, longitude, and city are required.' });
+  if (!latitude || !longitude) {
+    return res.status(400).json({ message: 'latitude and longitude are required.' });
   }
 
   try {
-    const geoKey = `online_drivers:${city.trim()}`;
+    // 1. Get all active city names from the database to know where we can search
+    const citiesResult = await db.query("SELECT city_name FROM servicable_cities WHERE status = 'active'");
+    if (citiesResult.rows.length === 0) {
+      return res.status(404).json({ message: "No serviceable cities are active in the system." });
+    }
+    const activeCities = citiesResult.rows.map(row => row.city_name);
 
-    // 1. Find driver IDs using the dynamic radius logic
-    const nearbyDriverIds = await findDriversWithDynamicRadius(geoKey, parseFloat(longitude), parseFloat(latitude));
+    // 2. Determine which city the user is in by checking Redis
+    let cityOfSearch = null;
+    for (const city of activeCities) {
+      const geoKey = `online_drivers:${city}`;
+      // Check for just ONE driver within a large radius (e.g., 50km) to quickly identify the correct city
+      const result = await redisClient.geoSearch(geoKey, 
+        { longitude: parseFloat(longitude), latitude: parseFloat(latitude) }, 
+        { radius: 50, unit: 'km' }, 
+        { COUNT: 1 }
+      );
+      if (result.length > 0) {
+        cityOfSearch = city;
+        break; // Found the city, no need to check others
+      }
+    }
+
+    if (!cityOfSearch) {
+      return res.status(200).json({ message: 'It seems you are outside our service area. No drivers found.', vehicles: {} });
+    }
+
+    // 3. Now that we have the correct city, find a good number of drivers with the dynamic radius logic
+    const finalGeoKey = `online_drivers:${cityOfSearch}`;
+    const nearbyDriverIds = await findDriversWithDynamicRadius(finalGeoKey, parseFloat(longitude), parseFloat(latitude));
 
     if (nearbyDriverIds.length === 0) {
       return res.status(200).json({ message: 'No drivers found nearby.', vehicles: {} });
     }
 
-    // 2. Fetch vehicle details for the found drivers from PostgreSQL
+    // 4. Fetch vehicle details for the found drivers from PostgreSQL
     const query = `
       SELECT
         d.id as driver_id,
@@ -65,15 +90,14 @@ const findNearbyDrivers = async (req, res) => {
     `;
     const { rows: vehicleDetails } = await db.query(query, [nearbyDriverIds]);
     
-    // 3. Categorize vehicles and format the response
+    // 5. Categorize vehicles and format the response
     const categorizedVehicles = {};
 
     for (const driverId of nearbyDriverIds) {
       const vehicle = vehicleDetails.find(v => v.driver_id === driverId);
       if (!vehicle) continue;
 
-      const driverLocation = await redisClient.geoPos(geoKey, driverId);
-      // Ensure the driver location exists before proceeding
+      const driverLocation = await redisClient.geoPos(finalGeoKey, driverId);
       if (!driverLocation || !driverLocation[0]) continue;
 
       const locationData = {
@@ -82,14 +106,12 @@ const findNearbyDrivers = async (req, res) => {
       };
 
       const mainCategory = vehicle.category;
-      const subCategory = vehicle.sub_category; // e.g., 'economy', 'premium', 'XL'
+      const subCategory = vehicle.sub_category;
 
-      // Initialize main category if it doesn't exist
       if (!categorizedVehicles[mainCategory]) {
           categorizedVehicles[mainCategory] = subCategory ? {} : [];
       }
       
-      // Place the location data in the correct category/sub-category
       if (mainCategory === 'car' && subCategory) {
           if (!categorizedVehicles.car[subCategory]) {
               categorizedVehicles.car[subCategory] = [];
