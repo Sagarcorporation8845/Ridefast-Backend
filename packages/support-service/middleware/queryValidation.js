@@ -5,11 +5,12 @@ const Joi = require('joi');
 const commonSchemas = {
   pagination: Joi.object({
     page: Joi.number().integer().min(1).default(1),
-    limit: Joi.number().integer().min(1).max(100).default(20)
+    limit: Joi.number().integer().min(1).max(100).default(10)
   }),
 
   search: Joi.object({
-    search: Joi.string().max(255).allow('').optional()
+    q: Joi.string().min(1).max(255).required(),
+    type: Joi.string().valid('driver', 'customer').default('customer')
   }),
 
   dateRange: Joi.object({
@@ -34,21 +35,21 @@ const commonSchemas = {
 
 // Specific validation schemas for different routes
 const routeSchemas = {
+  // Search route
+  search: commonSchemas.pagination.concat(commonSchemas.search),
+
   // Dashboard routes
   dashboardOverview: commonSchemas.pagination,
   
-  dashboardAnalytics: Joi.object({
-    ...commonSchemas.pagination.describe(),
+  dashboardAnalytics: commonSchemas.pagination.concat(Joi.object({
     period: Joi.string().valid('7d', '30d', '90d', '1y').default('7d')
-  }),
+  })),
 
   // Driver routes
-  driversList: Joi.object({
-    ...commonSchemas.pagination.describe(),
-    ...commonSchemas.search.describe(),
+  driversList: commonSchemas.pagination.concat(commonSchemas.search).concat(Joi.object({
     status: Joi.string().valid('active', 'suspended', 'pending_verification', 'inactive').optional(),
     verification_status: Joi.string().valid('verified', 'unverified', 'pending').optional()
-  }),
+  })),
 
   driverStatusUpdate: Joi.object({
     status: Joi.string().valid('active', 'suspended', 'pending_verification').required(),
@@ -68,12 +69,9 @@ const routeSchemas = {
   }),
 
   // Ride routes
-  ridesList: Joi.object({
-    ...commonSchemas.pagination.describe(),
-    ...commonSchemas.search.describe(),
-    ...commonSchemas.dateRange.describe(),
+  ridesList: commonSchemas.pagination.concat(commonSchemas.search).concat(commonSchemas.dateRange).concat(Joi.object({
     status: Joi.string().valid('requested', 'accepted', 'in_progress', 'completed', 'cancelled').optional()
-  }),
+  })),
 
   rideStatusUpdate: Joi.object({
     status: Joi.string().valid('cancelled', 'completed').required(),
@@ -85,11 +83,9 @@ const routeSchemas = {
   }),
 
   // User routes
-  usersList: Joi.object({
-    ...commonSchemas.pagination.describe(),
-    ...commonSchemas.search.describe(),
+  usersList: commonSchemas.pagination.concat(commonSchemas.search).concat(Joi.object({
     user_type: Joi.string().valid('customer', 'driver', 'all').default('customer')
-  }),
+  })),
 
   walletAdjustment: Joi.object({
     amount: Joi.number().required(),
@@ -102,14 +98,13 @@ const routeSchemas = {
   }),
 
   // Support routes
-  supportTickets: Joi.object({
-    ...commonSchemas.pagination.describe(),
+  supportTickets: commonSchemas.pagination.concat(Joi.object({
     status: Joi.string().valid('open', 'in_progress', 'pending_admin', 'resolved', 'closed').optional(),
     priority: Joi.string().valid('low', 'normal', 'high', 'urgent').optional()
-  }),
+  })),
 
   createTicket: Joi.object({
-    customerId: Joi.string().uuid().required(), // FIX: Added customerId validation
+    customerId: Joi.string().uuid().required(),
     subject: Joi.string().min(5).max(255).required(),
     description: Joi.string().min(10).max(2000).required(),
     priority: Joi.string().valid('low', 'normal', 'high', 'urgent').default('normal'),
@@ -135,9 +130,7 @@ const routeSchemas = {
     week_start: Joi.date().iso().optional()
   }),
 
-  financialReport: Joi.object({
-    ...commonSchemas.financialPeriod.describe()
-  }),
+  financialReport: commonSchemas.financialPeriod,
 
   driverPerformanceReport: Joi.object({
     period: Joi.string().valid('7d', '30d', '90d').default('30d'),

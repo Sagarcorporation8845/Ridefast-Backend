@@ -16,6 +16,7 @@ const supportRoutes = require('./routes/support');
 const reportsRoutes = require('./routes/reports');
 const ticketsRoutes = require('./routes/tickets');
 const agentRoutes = require('./routes/agent');
+const searchRoutes = require('./routes/search'); // Add this line
 
 const app = express();
 
@@ -34,6 +35,7 @@ app.use('/support', supportRoutes);
 app.use('/reports', reportsRoutes);
 app.use('/tickets', ticketsRoutes);
 app.use('/agent', agentRoutes);
+app.use('/search', searchRoutes); // Add this line
 
 const PORT = process.env.PORT || 3003;
 
