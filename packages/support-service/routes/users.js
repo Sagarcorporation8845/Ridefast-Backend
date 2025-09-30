@@ -8,105 +8,50 @@ const router = express.Router();
 
 /**
  * @route GET /users
- * @desc Get list of users with filtering and pagination
- * @access Private (City Admin, Support)
+ * @desc Get a list of all support agents within a city administrator's city.
+ * @access Private (City Admin only)
  */
-router.get('/', tokenVerify, sanitizeInput, validateQuery('usersList'), async (req, res) => {
+router.get('/', tokenVerify, sanitizeInput, async (req, res) => {
   try {
     const { role, city } = req.user;
-    const { 
-      page = 1, 
-      limit = 20, 
-      search,
-      user_type = 'customer' // customer, driver, all
-    } = req.query;
 
-    const offset = (page - 1) * limit;
-    let whereConditions = [];
-    let params = [];
-    let paramIndex = 1;
-
-    // Search filter
-    if (search) {
-      whereConditions.push(`(u.full_name ILIKE $${paramIndex} OR u.phone_number ILIKE $${paramIndex} OR u.email ILIKE $${paramIndex})`);
-      params.push(`%${search}%`);
-      paramIndex++;
+    // --- Authorization Check: Only city_admin can access this endpoint ---
+    if (role !== 'city_admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. This resource is available only to city administrators.'
+      });
     }
 
-    let joinClause = '';
-    let selectFields = `
-      u.id,
-      u.phone_number,
-      u.full_name,
-      u.email,
-      u.created_at,
-      u.date_of_birth,
-      u.gender,
-      u.home_address,
-      u.work_address
+    const agentsQuery = `
+      SELECT 
+        ps.id,
+        ps.full_name,
+        ps.email,
+        ps.status as account_status,
+        ps.created_at,
+        COALESCE(ags.status, 'offline') as online_status,
+        COALESCE(ags.active_tickets_count, 0) as active_tickets_count
+      FROM platform_staff ps
+      LEFT JOIN agent_status ags ON ps.id = ags.agent_id
+      WHERE ps.city = $1 AND ps.role = 'support'
+      ORDER BY ps.full_name
     `;
 
-    // Filter by user type and city for city admin/support
-    if (user_type === 'driver') {
-      joinClause = 'JOIN drivers d ON u.id = d.user_id';
-      selectFields += ', d.city, d.status as driver_status, d.is_verified';
-      
-      if (role === 'city_admin' || role === 'support') {
-        whereConditions.push(`d.city = $${paramIndex}`);
-        params.push(city);
-        paramIndex++;
-      }
-    } else if (user_type === 'customer') {
-      joinClause = 'LEFT JOIN drivers d ON u.id = d.user_id';
-      whereConditions.push('d.id IS NULL');
-    }
-
-    const whereClause = whereConditions.length > 0 ? 
-      `WHERE ${whereConditions.join(' AND ')}` : '';
-
-    // Get users
-    const usersQuery = `
-      SELECT ${selectFields}
-      FROM users u
-      ${joinClause}
-      ${whereClause}
-      ORDER BY u.created_at DESC
-      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
-    `;
-
-    // Count total users
-    const countQuery = `
-      SELECT COUNT(DISTINCT u.id) as total
-      FROM users u
-      ${joinClause}
-      ${whereClause}
-    `;
-
-    // Execute queries sequentially to avoid connection pool exhaustion
-    const usersResult = await db.query(usersQuery, [...params, limit, offset]);
-    const countResult = await db.query(countQuery, params);
-
-    const totalUsers = parseInt(countResult.rows[0].total);
-    const totalPages = Math.ceil(totalUsers / limit);
+    const agentsResult = await db.query(agentsQuery, [city]);
 
     res.json({
       success: true,
       data: {
-        users: usersResult.rows,
-        pagination: {
-          currentPage: parseInt(page),
-          totalPages,
-          totalItems: totalUsers,
-          itemsPerPage: parseInt(limit)
-        }
+        agents: agentsResult.rows
       }
     });
 
   } catch (error) {
-    console.error('Get users error:', error);
+    console.error('Get support agents error:', error);
     res.status(500).json({
       success: false,
-      message: 'Failed to fetch users'
+      message: 'Failed to fetch support agents'
     });
   }
 });
