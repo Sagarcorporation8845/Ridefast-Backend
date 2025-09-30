@@ -2,7 +2,6 @@
 const express = require('express');
 const { createProxyMiddleware } = require('http-proxy-middleware');
 const cors = require('cors');
-const { serve, setup } = require('./swagger');
 const { connectCentralDb, getConnectionStatus } = require('./shared/db');
 const { monitor } = require('./shared/dbMonitor');
 
@@ -24,8 +23,6 @@ const RIDE_SERVICE_URL = 'http://localhost:3006';
 app.use(cors());
 app.use(express.static('public'));
 
-// Swagger API Documentation
-app.use('/api-docs', serve, setup);
 
 // Database status endpoint
 app.get('/db-status', (req, res) => {
@@ -42,7 +39,7 @@ app.get('/', (req, res) => {
     const dbStatus = getConnectionStatus();
     res.json({
         message: 'RideFast API Gateway is running and healthy',
-        documentation: '/api-docs',
+        documentation: '/user-service',
         database: {
             status: dbStatus.isConnected ? 'connected' : 'disconnected',
             connections: `${dbStatus.totalConnections - dbStatus.idleConnections}/${dbStatus.totalConnections} active`
