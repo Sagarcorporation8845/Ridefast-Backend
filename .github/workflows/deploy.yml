@@ -67,6 +67,11 @@ jobs:
             echo "Installing ride-service dependencies..."
             cd ../ride-service
             npm install
+
+            # Install/update dependencies for the pricing-service
+            echo "Installing pricing-service dependencies..."
+            cd ../pricing-service
+            npm install
             
             # Go back to the root project directory
             cd ../..

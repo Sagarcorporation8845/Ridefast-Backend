@@ -17,7 +17,7 @@ const SUPPORT_SERVICE_URL = 'http://localhost:3003';
 const ADMIN_SERVICE_URL = 'http://localhost:3004';
 const VERIFICATION_SERVICE_URL = 'http://localhost:3005'; // Add this line
 const RIDE_SERVICE_URL = 'http://localhost:3006';
-
+const PRICING_SERVICE_URL = 'http://localhost:3007';
 
 // --- Middleware ---
 app.use(cors());
@@ -110,6 +110,14 @@ app.use('/ride-service', createProxyMiddleware({
     ws: true, // <-- IMPORTANT: This enables WebSocket proxying
     pathRewrite: {
         '^/ride-service': '', 
+    },
+}));
+
+app.use('/pricing-service', createProxyMiddleware({
+    target: PRICING_SERVICE_URL,
+    changeOrigin: true,
+    pathRewrite: {
+        '^/pricing-service': '', // remove the prefix
     },
 }));
 

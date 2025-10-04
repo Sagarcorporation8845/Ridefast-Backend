@@ -50,6 +50,13 @@ module.exports = {
       env: {
         PORT: process.env.RIDE_SERVICE_PORT || 3006
       }
+    }, {
+      name   : "pricing-service",
+      script : "./packages/pricing-service/index.js",
+      watch: false,
+      env: {
+        PORT: process.env.PRICING_SERVICE_PORT || 3007
+      }
     } ]
   }
 
