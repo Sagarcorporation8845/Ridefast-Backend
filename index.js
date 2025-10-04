@@ -18,6 +18,7 @@ const ADMIN_SERVICE_URL = 'http://localhost:3004';
 const VERIFICATION_SERVICE_URL = 'http://localhost:3005'; // Add this line
 const RIDE_SERVICE_URL = 'http://localhost:3006';
 const PRICING_SERVICE_URL = 'http://localhost:3007';
+const MAPS_SERVICE_URL = 'http://localhost:3008';
 
 // --- Middleware ---
 app.use(cors());
@@ -118,6 +119,14 @@ app.use('/pricing-service', createProxyMiddleware({
     changeOrigin: true,
     pathRewrite: {
         '^/pricing-service': '', // remove the prefix
+    },
+}));
+
+app.use('/maps-service', createProxyMiddleware({
+    target: MAPS_SERVICE_URL,
+    changeOrigin: true,
+    pathRewrite: {
+        '^/maps-service': '', // remove the prefix
     },
 }));
 

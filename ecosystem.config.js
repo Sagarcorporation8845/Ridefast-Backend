@@ -57,6 +57,13 @@ module.exports = {
       env: {
         PORT: process.env.PRICING_SERVICE_PORT || 3007
       }
+    }, {
+      name   : "maps-service",
+      script : "./packages/maps-service/index.js",
+      watch: false,
+      env: {
+        PORT: process.env.MAPS_SERVICE_PORT || 3008
+      }
     } ]
   }
 

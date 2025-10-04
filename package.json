@@ -11,7 +11,8 @@
     "start:verification-service": "cross-env PORT=3005 nodemon packages/verification-service/index.js",
     "start:ride-service": "cross-env PORT=3006 nodemon packages/ride-service/index.js",
     "start:pricing-service": "cross-env PORT=3007 nodemon packages/pricing-service/index.js",
-    "dev": "concurrently \"npm:start\" \"npm:start:user-service\" \"npm:start:driver-service\" \"npm:start:support-service\" \"npm:start:admin-service\" \"npm:start:verification-service\" \"npm:start:ride-service\" \"npm:start:pricing-service\" "
+    "start:maps-service": "cross-env PORT=3008 nodemon packages/maps-service/index.js",
+    "dev": "concurrently \"npm:start\" \"npm:start:user-service\" \"npm:start:driver-service\" \"npm:start:support-service\" \"npm:start:admin-service\" \"npm:start:verification-service\" \"npm:start:ride-service\" \"npm:start:pricing-service\" \"npm:start:maps-service\" "
 
  
   },

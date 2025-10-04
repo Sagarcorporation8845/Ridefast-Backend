@@ -72,6 +72,11 @@ jobs:
             echo "Installing pricing-service dependencies..."
             cd ../pricing-service
             npm install
+
+            # Install/update dependencies for the maps-service
+            echo "Installing maps-service dependencies..."
+            cd ../maps-service
+            npm install
             
             # Go back to the root project directory
             cd ../..
