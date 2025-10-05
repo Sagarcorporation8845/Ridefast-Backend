@@ -26,12 +26,23 @@ const handleStatusChange = async (ws, message) => {
 
     if (status === 'online' || status === 'go_home') {
       await redisClient.hSet(stateKey, 'status', status);
-      console.log(`Driver ${driverId} is now ${status}. Waiting for first location update to be visible.`);
-    } else { // offline
-      // This part is correct: it removes the driver from Redis when they go offline.
+      
+      const lastLocation = await redisClient.hGetAll(stateKey);
+      if (lastLocation && lastLocation.latitude && lastLocation.longitude) {
+          await redisClient.geoAdd(geoKey, {
+              longitude: parseFloat(lastLocation.longitude),
+              latitude: parseFloat(lastLocation.latitude),
+              member: driverId.toString(),
+          });
+          console.log(`Driver ${driverId} is now online and discoverable at last known location.`);
+      } else {
+          console.log(`Driver ${driverId} is now online but is not yet discoverable (awaiting first location update).`);
+      }
+
+    } else { // 'offline'
       await redisClient.zRem(geoKey, driverId.toString());
       await redisClient.del(stateKey);
-      console.log(`Driver ${driverId} is now offline and removed from map.`);
+      console.log(`Driver ${driverId} is now offline and removed from discovery.`);
     }
 
     await client.query('COMMIT');
@@ -56,22 +67,26 @@ const handleLocationUpdate = async (ws, message) => {
 
   try {
     const stateKey = `driver:state:${driverId}`;
+    const geoKey = `online_drivers:${city}`;
+    
+    // --- START OF FIX ---
+    // 1. Update the location fields WITHOUT overwriting the entire hash.
+    await redisClient.hSet(stateKey, 'latitude', latitude.toString());
+    await redisClient.hSet(stateKey, 'longitude', longitude.toString());
+    
+    // 2. Check the driver's status from the same hash.
     const driverStatus = await redisClient.hGet(stateKey, 'status');
 
-    // --- FIX IS HERE ---
-    // Only add/update the driver's location in the geospatial index if their status is 'online' or 'go_home'.
+    // 3. Only add/update them in the geospatial index if they are online.
     if (driverStatus === 'online' || driverStatus === 'go_home') {
-        const geoKey = `online_drivers:${city}`;
-        
-        // The GEOADD command will automatically add the driver if they are new
-        // or update their location if they already exist. This is the correct logic.
         await redisClient.geoAdd(geoKey, {
-          longitude,
-          latitude,
-          member: driverId.toString(),
+            longitude,
+            latitude,
+            member: driverId.toString(),
         });
-        console.log(`[Location Update] Updated location for online driver ${driverId} in ${city}.`);
+        console.log(`Updated location for online driver ${driverId}`); // Added for clear logging
     }
+    // --- END OF FIX ---
 
   } catch (error) {
     console.error(`Error updating location for driver ${driverId}:`, error);
@@ -85,7 +100,7 @@ const handleAcceptRide = async (ws, message) => {
     try {
         const result = await redisClient.set(`ride_request:${rideId}`, `accepted_by:${driverId}`, {
             XX: true,
-            GET: true
+            GET: true 
         });
         
         if (result === null || result.startsWith('accepted_by:')) {

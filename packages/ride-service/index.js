@@ -28,7 +28,7 @@ function heartbeat() {
 // --- UPDATED WEBSOCKET CONNECTION HANDLING ---
 server.on('upgrade', async function upgrade(request, socket, head) {
     // This authenticateSocket function needs to be updated as described below
-    const { isAuthenticated, role, userId, driverId } = await authenticateSocket(request);
+    const { isAuthenticated, role, userId, driverId, city } = await authenticateSocket(request);
 
     if (!isAuthenticated) {
         socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
@@ -41,9 +41,9 @@ server.on('upgrade', async function upgrade(request, socket, head) {
         ws.on('pong', heartbeat);
 
         if (role === 'driver') {
-            ws.driverInfo = { driverId, userId };
+            ws.driverInfo = { driverId, userId, city };
             connectionManager.activeDriverSockets.set(driverId, ws);
-            console.log(`Driver connected: ${driverId}`);
+            console.log(`Driver connected: ${driverId} in ${city}`);
         } else if (role === 'customer') {
             ws.userInfo = { userId };
             connectionManager.activeCustomerSockets.set(userId, ws);

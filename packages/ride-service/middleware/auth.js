@@ -21,13 +21,14 @@ const authenticateSocket = async (req) => {
                 throw new Error('Token does not have driver role.');
             }
             const { rows } = await db.query(
-                "SELECT id, status FROM drivers WHERE user_id = $1 AND status = 'active'",
+                "SELECT id, city, status FROM drivers WHERE user_id = $1 AND status = 'active'",
                 [userId]
             );
             if (rows.length === 0) {
                 throw new Error('Driver not found or account is not active.');
             }
-            return { isAuthenticated: true, role: 'driver', userId, driverId: rows[0].id };
+            const driver = rows[0];
+            return { isAuthenticated: true, role: 'driver', userId, driverId: driver.id, city: driver.city };
         } 
         
         if (roleProtocol === 'customer-protocol') {
