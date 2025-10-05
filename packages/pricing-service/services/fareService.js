@@ -90,6 +90,7 @@ const getFareEstimates = async (pickup, dropoff, userId) => {
                 routeHash,
                 pickup: { lat: pickup.latitude, lng: pickup.longitude },
                 dropoff: { lat: dropoff.latitude, lng: dropoff.longitude },
+                trip_distance_km: parseFloat(distanceKm.toFixed(1))
                 
             };
 
