@@ -26,11 +26,12 @@ const handleStatusChange = async (ws, message) => {
 
     if (status === 'online' || status === 'go_home') {
       await redisClient.hSet(stateKey, 'status', status);
-      console.log(`Driver ${driverId} is now ${status}.`);
+      console.log(`Driver ${driverId} is now ${status}. Waiting for first location update to be visible.`);
     } else { // offline
+      // This part is correct: it removes the driver from Redis when they go offline.
       await redisClient.zRem(geoKey, driverId.toString());
       await redisClient.del(stateKey);
-      console.log(`Driver ${driverId} is now offline.`);
+      console.log(`Driver ${driverId} is now offline and removed from map.`);
     }
 
     await client.query('COMMIT');
@@ -50,17 +51,27 @@ const handleLocationUpdate = async (ws, message) => {
   const { driverId, city } = ws.driverInfo;
 
   if (typeof latitude !== 'number' || typeof longitude !== 'number') {
-    return;
+    return; // Ignore invalid data
   }
 
   try {
-    const geoKey = `online_drivers:${city}`;
-    
-    await redisClient.geoAdd(geoKey, {
-      longitude,
-      latitude,
-      member: driverId.toString(),
-    });
+    const stateKey = `driver:state:${driverId}`;
+    const driverStatus = await redisClient.hGet(stateKey, 'status');
+
+    // --- FIX IS HERE ---
+    // Only add/update the driver's location in the geospatial index if their status is 'online' or 'go_home'.
+    if (driverStatus === 'online' || driverStatus === 'go_home') {
+        const geoKey = `online_drivers:${city}`;
+        
+        // The GEOADD command will automatically add the driver if they are new
+        // or update their location if they already exist. This is the correct logic.
+        await redisClient.geoAdd(geoKey, {
+          longitude,
+          latitude,
+          member: driverId.toString(),
+        });
+        console.log(`[Location Update] Updated location for online driver ${driverId} in ${city}.`);
+    }
 
   } catch (error) {
     console.error(`Error updating location for driver ${driverId}:`, error);
@@ -72,15 +83,11 @@ const handleAcceptRide = async (ws, message) => {
     const { driverId } = ws.driverInfo;
 
     try {
-        // Atomically check and update the ride request key in Redis.
-        // This command attempts to change the value of the key only if it exists.
-        // It returns the new value if successful, or null if the key doesn't exist (expired).
         const result = await redisClient.set(`ride_request:${rideId}`, `accepted_by:${driverId}`, {
-            XX: true, // Only set the key if it already exists
-            GET: true // Return the old value before setting
+            XX: true,
+            GET: true
         });
         
-        // If result is null, the key expired. If it contains 'accepted_by', another driver was faster.
         if (result === null || result.startsWith('accepted_by:')) {
             ws.send(JSON.stringify({ type: 'RIDE_ALREADY_TAKEN', payload: { rideId } }));
             return;
@@ -88,7 +95,6 @@ const handleAcceptRide = async (ws, message) => {
 
         console.log(`[RideManager] Driver ${driverId} has won ride ${rideId}`);
         
-        // This driver is the winner, update database records.
         const client = await db.getClient();
         try {
             await client.query('BEGIN');
@@ -99,7 +105,6 @@ const handleAcceptRide = async (ws, message) => {
             );
             
             if (rideUpdateResult.rowCount === 0) {
-                // This is a rare race condition where another process might have updated the DB first.
                 throw new Error('Ride was already accepted by another driver.');
             }
             
@@ -109,21 +114,15 @@ const handleAcceptRide = async (ws, message) => {
 
             await client.query('COMMIT');
 
-            // Notify the winning driver
             ws.send(JSON.stringify({ type: 'RIDE_CONFIRMED', payload: ride }));
 
-            // Notify the customer via their WebSocket
             const customerSocket = connectionManager.activeCustomerSockets.get(ride.customer_id);
             if (customerSocket) {
-                // You should fetch more driver details here to send to the customer
                 customerSocket.send(JSON.stringify({ type: 'DRIVER_ASSIGNED', payload: { rideId, driverId } }));
             }
 
-            // TODO: Notify other broadcasted drivers that the ride has been taken.
-
         } catch (dbError) {
             await client.query('ROLLBACK');
-            // Revert Redis state if DB update failed
             await redisClient.set(`ride_request:${rideId}`, result, { KEEPTTL: true });
             throw dbError;
         } finally {
