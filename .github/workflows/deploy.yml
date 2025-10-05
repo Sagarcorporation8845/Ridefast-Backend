@@ -66,6 +66,7 @@ jobs:
             # Install/update dependencies for the ride-service
             echo "Installing ride-service dependencies..."
             cd ../ride-service
+            npm install axios
             npm install
 
             # Install/update dependencies for the pricing-service

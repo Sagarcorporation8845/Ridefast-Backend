@@ -3,14 +3,15 @@ const db = require('../db');
 const { redisClient } = require('../services/redisClient');
 const jwt = require('jsonwebtoken');
 const { manageRideRequest } = require('../services/rideManager');
+const axios = require('axios'); // Ensure axios is in your ride-service package.json
 
 /**
  * Searches for drivers in Redis with a dynamically expanding radius.
  */
 const findDriversWithDynamicRadius = async (geoKey, longitude, latitude) => {
-    let radius = 0.5; // Start with a 500m radius
-    const maxRadius = 10; // Max search radius of 10km
-    const minDrivers = 5; // The minimum number of drivers we want to find
+    let radius = 0.5;
+    const maxRadius = 10;
+    const minDrivers = 5;
     let drivers = [];
 
     while (radius <= maxRadius) {
@@ -122,14 +123,13 @@ const findNearbyDrivers = async (req, res) => {
   }
 };
 
+
 /**
  * @desc Handles a customer's request to book a ride.
  */
 const requestRide = async (req, res) => {
     const { fareId, payment_method, use_wallet = false } = req.body;
-    const userId = req.user.userId;
-    
-    console.log(`[RideRequest-Debug] Received ride request from user ${userId}`);
+    const { userId, token } = req.user; 
 
     if (!fareId || !payment_method) {
         return res.status(400).json({ message: 'fareId and payment_method are required.' });
@@ -137,22 +137,15 @@ const requestRide = async (req, res) => {
 
     const client = await db.getClient();
     try {
-        // 1. Decode and Validate the fareId JWT
         const decodedFare = jwt.verify(fareId, process.env.JWT_SECRET);
-        console.log(`[RideRequest-Debug] Decoded fareId successfully:`, decodedFare);
 
         if (decodedFare.userId !== userId) {
-            console.error(`[RideRequest-Debug] FORBIDDEN: User ${userId} tried to use fareId of user ${decodedFare.userId}`);
             return res.status(403).json({ message: 'Fare ID does not belong to this user.' });
         }
         
-        // --- START OF FIX ---
-        // Validate that the coordinates exist in the payload
         if (!decodedFare.pickup || !decodedFare.dropoff) {
-            console.error(`[RideRequest-Debug] CRITICAL: fareId is missing pickup/dropoff coordinates.`);
             return res.status(400).json({ message: 'Invalid fareId. Missing location data.' });
         }
-        // --- END OF FIX ---
 
         const totalFare = parseFloat(decodedFare.fare);
         let walletDeduction = 0;
@@ -191,22 +184,37 @@ const requestRide = async (req, res) => {
             }
         }
         
-        // 3. Create the Ride Record using coordinates from the fareId
+        let pickupAddress = 'Unknown Pickup Location';
+        let destinationAddress = 'Unknown Destination';
+        try {
+            const geoApiHeaders = { headers: { 'Authorization': `Bearer ${token}` } };
+            const pickupPromise = axios.get(`http://localhost:3008/maps/geocode/reverse?lat=${decodedFare.pickup.lat}&lng=${decodedFare.pickup.lng}`, geoApiHeaders);
+            const dropoffPromise = axios.get(`http://localhost:3008/maps/geocode/reverse?lat=${decodedFare.dropoff.lat}&lng=${decodedFare.dropoff.lng}`, geoApiHeaders);
+            
+            const [pickupResponse, dropoffResponse] = await Promise.all([pickupPromise, dropoffPromise]);
+
+            if (pickupResponse.data && pickupResponse.data.results && pickupResponse.data.results[0]) {
+                pickupAddress = pickupResponse.data.results[0].formatted_address;
+            }
+            if (dropoffResponse.data && dropoffResponse.data.results && dropoffResponse.data.results[0]) {
+                destinationAddress = dropoffResponse.data.results[0].formatted_address;
+            }
+        } catch (geoError) {
+            console.error('[RideRequest] Could not fetch addresses from maps-service:', geoError.message);
+        }
+
         const { pickup, dropoff } = decodedFare;
         const rideResult = await client.query(
             `INSERT INTO rides (customer_id, pickup_address, destination_address, pickup_latitude, pickup_longitude, destination_latitude, destination_longitude, status, fare, payment_method, wallet_deduction, amount_due)
-             VALUES ($1, 'Pickup Address Placeholder', 'Destination Address Placeholder', $2, $3, $4, $5, 'requested', $6, $7, $8, $9)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, 'requested', $8, $9, $10, $11)
              RETURNING id`,
-            [userId, pickup.lat, pickup.lng, dropoff.lat, dropoff.lng, totalFare, payment_method, walletDeduction, amountDue]
+            [userId, pickupAddress, destinationAddress, pickup.lat, pickup.lng, dropoff.lat, dropoff.lng, totalFare, payment_method, walletDeduction, amountDue]
         );
 
         const rideId = rideResult.rows[0].id;
-        console.log(`[RideRequest-Debug] Ride record created in database with ID: ${rideId} and correct coordinates.`);
         
         await client.query('COMMIT');
 
-        // 4. Begin the broadcast logic to find drivers.
-        console.log(`[RideRequest-Debug] Handing off to RideManager with rideId: ${rideId}`);
         manageRideRequest(rideId, decodedFare);
 
         res.status(201).json({
@@ -221,12 +229,6 @@ const requestRide = async (req, res) => {
 
     } catch (error) {
         await client.query('ROLLBACK');
-        if (error.name === 'TokenExpiredError') {
-            return res.status(400).json({ message: 'Fare quote has expired. Please try again.' });
-        }
-        if (error.name === 'JsonWebTokenError') {
-            return res.status(400).json({ message: 'Invalid fare ID.' });
-        }
         console.error('Error requesting ride:', error);
         res.status(500).json({ message: 'Internal server error.' });
     } finally {
