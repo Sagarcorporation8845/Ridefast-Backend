@@ -1,5 +1,5 @@
 // packages/pricing-service/controllers/fareController.js
-const fareService = require('../services/fareService.js'); // Explicitly added .js extension
+const fareService = require('../services/fareService.js');
 
 const calculateFare = async (req, res) => {
     const { pickup, dropoff } = req.body;
@@ -10,13 +10,17 @@ const calculateFare = async (req, res) => {
     }
 
     try {
-        const fareEstimates = await fareService.getFareEstimates(pickup, dropoff, userId);
+        const fareData = await fareService.getFareEstimates(pickup, dropoff, userId);
         
-        if (!fareEstimates || fareEstimates.length === 0) {
-            return res.status(404).json({ message: 'Could not calculate fares. The route may be outside our service area.' });
+        // If no options are available (e.g., outside service area), send a 404 but include payment info.
+        if (!fareData || !fareData.options || fareData.options.length === 0) {
+            return res.status(404).json({ 
+                message: 'Could not calculate fares. The route may be outside our service area.',
+                payment_options: fareData.payment_options 
+            });
         }
 
-        res.status(200).json({ options: fareEstimates });
+        res.status(200).json(fareData); // Send the entire object with both options and payment_options
 
     } catch (error) {
         console.error('Fare calculation controller error:', error);

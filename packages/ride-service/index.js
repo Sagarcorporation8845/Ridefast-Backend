@@ -6,106 +6,108 @@ const express = require('express');
 const http = require('http');
 const { WebSocketServer } = require('ws');
 const { authenticateSocket } = require('./middleware/auth');
-const { handleStatusChange, handleLocationUpdate } = require('./handlers/driverHandlers');
+const { handleStatusChange, handleLocationUpdate, handleAcceptRide } = require('./handlers/driverHandlers');
 const { connectDb } = require('./db');
 const { connectRedis } = require('./services/redisClient');
-const customerRoutes = require('./routes/customer'); // <-- Import the new customer routes
+const customerRoutes = require('./routes/customer');
+const { connectionManager } = require('./services/rideManager'); // Import the connection manager
 
 const app = express();
 const server = http.createServer(app);
-const wss = new WebSocketServer({ server });
+const wss = new WebSocketServer({ noServer: true }); // We'll handle the upgrade manually
 
 const PORT = process.env.RIDE_SERVICE_PORT || 3006;
 
-// --- Middleware ---
-app.use(express.json()); // Add JSON body parser for HTTP requests
-
-// --- API Routes ---
-// Mount the new customer routes on the /customer path
+app.use(express.json());
 app.use('/customer', customerRoutes);
 
-// --- WebSocket Heartbeat Function ---
 function heartbeat() {
   this.isAlive = true;
 }
 
-// --- WebSocket Connection Handling ---
-wss.on('connection', async (ws, req) => {
-  console.log('Client attempting to connect...');
+// --- UPDATED WEBSOCKET CONNECTION HANDLING ---
+server.on('upgrade', async function upgrade(request, socket, head) {
+    // This authenticateSocket function needs to be updated as described below
+    const { isAuthenticated, role, userId, driverId } = await authenticateSocket(request);
 
-  const isAuthenticated = await authenticateSocket(ws, req);
+    if (!isAuthenticated) {
+        socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+        socket.destroy();
+        return;
+    }
 
-  if (isAuthenticated) {
-    console.log(`Driver connected: ${ws.driverInfo.driverId}`);
+    wss.handleUpgrade(request, socket, head, function done(ws) {
+        ws.isAlive = true;
+        ws.on('pong', heartbeat);
 
-    // Start heartbeat for this connection
-    ws.isAlive = true;
-    ws.on('pong', heartbeat);
+        if (role === 'driver') {
+            ws.driverInfo = { driverId, userId };
+            connectionManager.activeDriverSockets.set(driverId, ws);
+            console.log(`Driver connected: ${driverId}`);
+        } else if (role === 'customer') {
+            ws.userInfo = { userId };
+            connectionManager.activeCustomerSockets.set(userId, ws);
+            console.log(`Customer connected: ${userId}`);
+        }
 
+        wss.emit('connection', ws, request);
+    });
+});
+
+wss.on('connection', (ws) => {
     ws.on('message', (message) => {
-      try {
-        const parsedMessage = JSON.parse(message.toString());
-        
-        if (!parsedMessage.type) {
-          console.log(`Received message without a 'type':`, parsedMessage);
-          return;
-        }
+        try {
+            const parsedMessage = JSON.parse(message.toString());
+            const type = parsedMessage.type;
 
-        switch (parsedMessage.type) {
-          case 'status_change':
-            handleStatusChange(ws, parsedMessage);
-            break;
-          case 'location_update':
-            handleLocationUpdate(ws, parsedMessage);
-            break;
-          default:
-            console.log(`Received unknown message type: ${parsedMessage.type}`);
+            if (ws.driverInfo) { // Driver-specific messages
+                switch (type) {
+                    case 'status_change':
+                        handleStatusChange(ws, parsedMessage);
+                        break;
+                    case 'location_update':
+                        handleLocationUpdate(ws, parsedMessage);
+                        break;
+                    case 'ACCEPT_RIDE':
+                        handleAcceptRide(ws, parsedMessage); // New handler
+                        break;
+                }
+            }
+            // Add customer-specific message handling here if needed in the future
+            
+        } catch (e) {
+            console.error('Failed to parse incoming message:', message.toString(), e);
         }
-      } catch (e) {
-        console.error('Failed to parse incoming message as JSON:', message.toString(), e);
-        ws.send(JSON.stringify({ type: 'error', message: 'Invalid message format. Expected JSON.' }));
-      }
     });
 
     ws.on('close', () => {
-      console.log(`Driver disconnected: ${ws.driverInfo.driverId}`);
-      if (ws.driverInfo) {
-        handleStatusChange(ws, { payload: { status: 'offline' } });
-      }
+        if (ws.driverInfo) {
+            console.log(`Driver disconnected: ${ws.driverInfo.driverId}`);
+            connectionManager.activeDriverSockets.delete(ws.driverInfo.driverId);
+            handleStatusChange(ws, { payload: { status: 'offline' } });
+        }
+        if (ws.userInfo) {
+            console.log(`Customer disconnected: ${ws.userInfo.userId}`);
+            connectionManager.activeCustomerSockets.delete(ws.userInfo.userId);
+        }
     });
-
-  } else {
-    console.log('Client connection rejected: Authentication failed.');
-  }
 });
 
-// Interval to check for dead connections and clean them up
-const interval = setInterval(function ping() {
-  wss.clients.forEach(function each(ws) {
+// Interval for heartbeat
+const interval = setInterval(() => {
+  wss.clients.forEach((ws) => {
     if (ws.isAlive === false) return ws.terminate();
-
     ws.isAlive = false;
     ws.ping();
   });
-}, 20000); // Check every 20 seconds
+}, 20000);
 
-wss.on('close', function close() {
-  clearInterval(interval);
-});
+app.get('/', (req, res) => res.status(200).send('Ride-Service is running.'));
 
-// Health check endpoint for the service itself
-app.get('/', (req, res) => {
-  res.status(200).send('Ride-Service is running and healthy.');
-});
-
-// --- Server Startup ---
 const startServer = async () => {
   await connectDb();
   await connectRedis();
-  
-  server.listen(PORT, () => {
-    console.log(`Ride-Service is listening on port ${PORT}`);
-  });
+  server.listen(PORT, () => console.log(`Ride-Service is listening on port ${PORT}`));
 };
 
 startServer();
