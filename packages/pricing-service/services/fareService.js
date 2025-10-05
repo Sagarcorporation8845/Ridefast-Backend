@@ -4,7 +4,7 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const googleMapsService = require('./googleMapsService');
 
-const FARE_ID_EXPIRATION = process.env.FARE_ID_EXPIRATION_SECONDS || '300s';
+const FARE_ID_EXPIRATION_SECONDS = parseInt(process.env.FARE_ID_EXPIRATION_SECONDS, 10) || 300;
 
 // Creates a SHA256 hash of the route to ensure the fare is tied to the specific journey.
 const createRouteHash = (pickup, dropoff) => {
