@@ -89,7 +89,8 @@ const getFareEstimates = async (pickup, dropoff, userId) => {
                 sub_category: rate.sub_category,
                 routeHash,
                 pickup: { lat: pickup.latitude, lng: pickup.longitude },
-                dropoff: { lat: dropoff.latitude, lng: dropoff.longitude }
+                dropoff: { lat: dropoff.latitude, lng: dropoff.longitude },
+                
             };
 
             // --- FIX IS HERE ---

@@ -42,7 +42,6 @@ const findEligibleDrivers = async (pickupCoordinates, city, vehicleCategory, sub
 
 /**
  * Calculates the distance between two geo-coordinates using the Haversine formula.
- * @returns {number} Distance in kilometers.
  */
 const getHaversineDistance = (coords1, coords2) => {
     const toRad = (x) => x * Math.PI / 180;
@@ -62,11 +61,11 @@ const getHaversineDistance = (coords1, coords2) => {
 /**
  * Broadcasts a ride request to drivers with a personalized, enriched payload.
  */
-const broadcastToDrivers = async (rideId, ride, driverIds) => {
+const broadcastToDrivers = async (rideId, ride, driverIds, decodedFare) => {
     const pickupCoords = { latitude: parseFloat(ride.pickup_latitude), longitude: parseFloat(ride.pickup_longitude) };
     const dropoffCoords = { latitude: parseFloat(ride.destination_latitude), longitude: parseFloat(ride.destination_longitude) };
 
-    const totalTripDistance = getHaversineDistance(pickupCoords, dropoffCoords).toFixed(1);
+    const totalTripDistance = decodedFare.trip_distance_km;
 
     for (const driverId of driverIds) {
         const ws = connectionManager.activeDriverSockets.get(driverId);
@@ -119,14 +118,20 @@ const broadcastToDrivers = async (rideId, ride, driverIds) => {
  */
 const manageRideRequest = async (rideId, decodedFare) => {
     const { rows } = await db.query('SELECT * FROM rides WHERE id = $1', [rideId]);
-    if (rows.length === 0) return;
+    if (rows.length === 0) {
+        console.error(`[RideManager] CRITICAL: Ride ${rideId} not found in database.`);
+        return;
+    }
     const ride = rows[0];
 
     const vehicleCategory = decodedFare.vehicle;
     const subCategory = decodedFare.sub_category;
 
     const cityResult = await db.query(`SELECT city FROM drivers WHERE user_id = $1`, [ride.customer_id]);
-    if (cityResult.rows.length === 0) return;
+    if (cityResult.rows.length === 0) {
+        console.error(`[RideManager] CRITICAL: Could not determine city for ride ${rideId}. Customer may not have a driver profile.`);
+        return;
+    }
     const city = cityResult.rows[0].city;
 
     const pickupCoordinates = {
@@ -137,7 +142,7 @@ const manageRideRequest = async (rideId, decodedFare) => {
     const nearbyDrivers1 = await findEligibleDrivers(pickupCoordinates, city, vehicleCategory, subCategory, 1);
     if (nearbyDrivers1.length > 0) {
         await redisClient.set(`ride_request:${rideId}`, "attempt_1", { EX: 20 });
-        await broadcastToDrivers(rideId, ride, nearbyDrivers1);
+        await broadcastToDrivers(rideId, ride, nearbyDrivers1, decodedFare);
     }
 
     setTimeout(async () => {
@@ -149,7 +154,7 @@ const manageRideRequest = async (rideId, decodedFare) => {
         const nearbyDrivers2 = await findEligibleDrivers(pickupCoordinates, city, vehicleCategory, subCategory, 2);
         if (nearbyDrivers2.length > 0) {
             await redisClient.set(`ride_request:${rideId}`, "attempt_2", { EX: 20 });
-            await broadcastToDrivers(rideId, ride, nearbyDrivers2);
+            await broadcastToDrivers(rideId, ride, nearbyDrivers2, decodedFare);
         }
 
         setTimeout(async () => {

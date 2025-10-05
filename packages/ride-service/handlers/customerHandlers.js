@@ -129,7 +129,7 @@ const findNearbyDrivers = async (req, res) => {
  */
 const requestRide = async (req, res) => {
     const { fareId, payment_method, use_wallet = false } = req.body;
-    const { userId, token } = req.user; 
+    const { userId } = req.user; 
 
     if (!fareId || !payment_method) {
         return res.status(400).json({ message: 'fareId and payment_method are required.' });
@@ -184,12 +184,14 @@ const requestRide = async (req, res) => {
             }
         }
         
+        // --- START OF FIX ---
+        // 1. Fetch human-readable addresses directly from Google Maps API.
         let pickupAddress = 'Unknown Pickup Location';
         let destinationAddress = 'Unknown Destination';
         try {
-            const geoApiHeaders = { headers: { 'Authorization': `Bearer ${token}` } };
-            const pickupPromise = axios.get(`http://localhost:3008/maps/geocode/reverse?lat=${decodedFare.pickup.lat}&lng=${decodedFare.pickup.lng}`, geoApiHeaders);
-            const dropoffPromise = axios.get(`http://localhost:3008/maps/geocode/reverse?lat=${decodedFare.dropoff.lat}&lng=${decodedFare.dropoff.lng}`, geoApiHeaders);
+            const GOOGLE_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
+            const pickupPromise = axios.get(`https://maps.googleapis.com/maps/api/geocode/json?latlng=${decodedFare.pickup.lat},${decodedFare.pickup.lng}&key=${GOOGLE_API_KEY}`);
+            const dropoffPromise = axios.get(`https://maps.googleapis.com/maps/api/geocode/json?latlng=${decodedFare.dropoff.lat},${decodedFare.dropoff.lng}&key=${GOOGLE_API_KEY}`);
             
             const [pickupResponse, dropoffResponse] = await Promise.all([pickupPromise, dropoffPromise]);
 
@@ -200,9 +202,10 @@ const requestRide = async (req, res) => {
                 destinationAddress = dropoffResponse.data.results[0].formatted_address;
             }
         } catch (geoError) {
-            console.error('[RideRequest] Could not fetch addresses from maps-service:', geoError.message);
+            console.error('[RideRequest] Could not fetch addresses directly from Google:', geoError.message);
         }
 
+        // 2. Create the Ride Record with real addresses and coordinates.
         const { pickup, dropoff } = decodedFare;
         const rideResult = await client.query(
             `INSERT INTO rides (customer_id, pickup_address, destination_address, pickup_latitude, pickup_longitude, destination_latitude, destination_longitude, status, fare, payment_method, wallet_deduction, amount_due)
@@ -210,6 +213,7 @@ const requestRide = async (req, res) => {
              RETURNING id`,
             [userId, pickupAddress, destinationAddress, pickup.lat, pickup.lng, dropoff.lat, dropoff.lng, totalFare, payment_method, walletDeduction, amountDue]
         );
+        // --- END OF FIX ---
 
         const rideId = rideResult.rows[0].id;
         
