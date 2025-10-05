@@ -128,6 +128,8 @@ const findNearbyDrivers = async (req, res) => {
 const requestRide = async (req, res) => {
     const { fareId, payment_method, use_wallet = false } = req.body;
     const userId = req.user.userId;
+    
+    console.log(`[RideRequest-Debug] Received ride request from user ${userId}`);
 
     if (!fareId || !payment_method) {
         return res.status(400).json({ message: 'fareId and payment_method are required.' });
@@ -137,11 +139,20 @@ const requestRide = async (req, res) => {
     try {
         // 1. Decode and Validate the fareId JWT
         const decodedFare = jwt.verify(fareId, process.env.JWT_SECRET);
+        console.log(`[RideRequest-Debug] Decoded fareId successfully:`, decodedFare);
 
-        // Security check: Ensure the user booking the ride is the one who got the fare quote.
         if (decodedFare.userId !== userId) {
+            console.error(`[RideRequest-Debug] FORBIDDEN: User ${userId} tried to use fareId of user ${decodedFare.userId}`);
             return res.status(403).json({ message: 'Fare ID does not belong to this user.' });
         }
+        
+        // --- START OF FIX ---
+        // Validate that the coordinates exist in the payload
+        if (!decodedFare.pickup || !decodedFare.dropoff) {
+            console.error(`[RideRequest-Debug] CRITICAL: fareId is missing pickup/dropoff coordinates.`);
+            return res.status(400).json({ message: 'Invalid fareId. Missing location data.' });
+        }
+        // --- END OF FIX ---
 
         const totalFare = parseFloat(decodedFare.fare);
         let walletDeduction = 0;
@@ -149,7 +160,6 @@ const requestRide = async (req, res) => {
 
         await client.query('BEGIN');
 
-        // 2. Handle Wallet Logic
         if (use_wallet) {
             const walletResult = await client.query(
                 `SELECT id, balance FROM wallets WHERE user_id = $1 FOR UPDATE`,
@@ -164,7 +174,6 @@ const requestRide = async (req, res) => {
 
             const walletBalance = parseFloat(wallet.balance);
 
-            // Business logic for payment methods
             if (payment_method === 'wallet') {
                 if (walletBalance < totalFare) {
                     await client.query('ROLLBACK');
@@ -172,7 +181,7 @@ const requestRide = async (req, res) => {
                 }
                 walletDeduction = totalFare;
                 amountDue = 0;
-            } else { // For 'cash' or 'online' with wallet usage
+            } else {
                 if (payment_method === 'cash') {
                     await client.query('ROLLBACK');
                     return res.status(400).json({ message: 'Wallet balance cannot be partially used for cash payments.' });
@@ -182,20 +191,23 @@ const requestRide = async (req, res) => {
             }
         }
         
-        // 3. Create the Ride Record
+        // 3. Create the Ride Record using coordinates from the fareId
+        const { pickup, dropoff } = decodedFare;
         const rideResult = await client.query(
             `INSERT INTO rides (customer_id, pickup_address, destination_address, pickup_latitude, pickup_longitude, destination_latitude, destination_longitude, status, fare, payment_method, wallet_deduction, amount_due)
-             VALUES ($1, 'Pickup Address from fareId', 'Destination Address from fareId', 0, 0, 0, 0, 'requested', $2, $3, $4, $5)
+             VALUES ($1, 'Pickup Address Placeholder', 'Destination Address Placeholder', $2, $3, $4, $5, 'requested', $6, $7, $8, $9)
              RETURNING id`,
-            [userId, totalFare, payment_method, walletDeduction, amountDue]
+            [userId, pickup.lat, pickup.lng, dropoff.lat, dropoff.lng, totalFare, payment_method, walletDeduction, amountDue]
         );
 
         const rideId = rideResult.rows[0].id;
+        console.log(`[RideRequest-Debug] Ride record created in database with ID: ${rideId} and correct coordinates.`);
         
         await client.query('COMMIT');
 
         // 4. Begin the broadcast logic to find drivers.
-        manageRideRequest(rideId);
+        console.log(`[RideRequest-Debug] Handing off to RideManager with rideId: ${rideId}`);
+        manageRideRequest(rideId, decodedFare);
 
         res.status(201).json({
             message: 'Ride requested successfully. Searching for a driver.',

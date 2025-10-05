@@ -3,53 +3,64 @@ const db = require('../db');
 const { redisClient } = require('../services/redisClient');
 
 // This object will be a simplified in-memory map of active connections.
-// In a production scenario with multiple server instances, this would be managed
-// through Redis Pub/Sub or another shared messaging system.
 const connectionManager = {
     activeDriverSockets: new Map(),
     activeCustomerSockets: new Map(),
 };
 
 /**
- * Finds eligible drivers in an expanding radius.
- * @param {object} pickupCoordinates - The lat/lng of the pickup.
- * @param {string} city - The city of the ride.
- * @param {string} vehicleCategory - The category of vehicle required.
- * @param {number} attempt - The attempt number (1 for small radius, 2 for larger).
- * @returns {Promise<string[]>} - A promise that resolves to an array of driver IDs.
+ * Finds eligible drivers in an expanding radius, filtered by vehicle category.
  */
-const findEligibleDrivers = async (pickupCoordinates, city, vehicleCategory, attempt = 1) => {
+const findEligibleDrivers = async (pickupCoordinates, city, vehicleCategory, subCategory, attempt = 1) => {
     const radius = attempt === 1 ? 3 : 7; // 3km for 1st attempt, 7km for 2nd
     const geoKey = `online_drivers:${city}`;
+    console.log(`[RideManager-Debug] Attempt #${attempt}: Searching for '${vehicleCategory}' drivers in city '${city}' within ${radius}km.`);
 
     try {
         const driverIds = await redisClient.geoSearch(geoKey, pickupCoordinates, { radius, unit: 'km' });
 
-        if (driverIds.length === 0) return [];
+        if (driverIds.length === 0) {
+            console.log(`[RideManager-Debug] GEOSEARCH found 0 drivers in the area.`);
+            return [];
+        }
+        console.log(`[RideManager-Debug] GEOSEARCH found ${driverIds.length} potential drivers:`, driverIds);
 
-        // Filter drivers by vehicle category and ensure they are connected via WebSocket
-        const { rows } = await db.query(
-            `SELECT d.id FROM drivers d
-             JOIN driver_vehicles dv ON d.id = dv.driver_id
-             WHERE d.id = ANY($1::uuid[]) AND dv.category = $2`,
-            [driverIds, vehicleCategory]
-        );
+        // Build a dynamic query to filter by vehicle category and sub-category
+        let filterQuery = `
+            SELECT d.id FROM drivers d
+            JOIN driver_vehicles dv ON d.id = dv.driver_id
+            WHERE d.id = ANY($1::uuid[]) AND dv.category = $2
+        `;
+        const queryParams = [driverIds, vehicleCategory];
+        
+        if (subCategory) {
+            filterQuery += ` AND dv.sub_category = $3`;
+            queryParams.push(subCategory);
+        }
+
+        const { rows } = await db.query(filterQuery, queryParams);
+        
+        if (rows.length === 0) {
+            console.log(`[RideManager-Debug] No drivers found after filtering for vehicle category '${vehicleCategory}'.`);
+            return [];
+        }
 
         const eligibleDriverIds = rows.map(row => row.id);
+        console.log(`[RideManager-Debug] Found ${eligibleDriverIds.length} drivers with the correct vehicle type.`);
         
-        // Return only drivers who have an active WebSocket connection
-        return eligibleDriverIds.filter(id => connectionManager.activeDriverSockets.has(id));
+        // Final check to ensure drivers have an active WebSocket connection
+        const connectedAndEligible = eligibleDriverIds.filter(id => connectionManager.activeDriverSockets.has(id));
+        console.log(`[RideManager-Debug] Found ${connectedAndEligible.length} connected and eligible drivers.`);
+        
+        return connectedAndEligible;
     } catch (error) {
-        console.error('Error finding eligible drivers:', error);
+        console.error('[RideManager-Debug] Error in findEligibleDrivers:', error);
         return [];
     }
 };
 
 /**
  * Broadcasts a ride request to a list of drivers.
- * @param {string} rideId - The ID of the ride.
- * @param {object} rideDetails - Details of the ride to be sent to drivers.
- * @param {string[]} driverIds - An array of driver IDs to broadcast to.
  */
 const broadcastToDrivers = (rideId, rideDetails, driverIds) => {
     const message = {
@@ -73,57 +84,83 @@ const broadcastToDrivers = (rideId, rideDetails, driverIds) => {
 
 /**
  * Manages the two-attempt broadcast flow for a new ride request.
- * @param {string} rideId - The ID of the ride to manage.
  */
-const manageRideRequest = async (rideId) => {
+const manageRideRequest = async (rideId, decodedFare) => {
+    console.log(`[RideManager-Debug] Managing new ride request: ${rideId}`);
+    
+    // 1. Fetch the full ride details from the database
     const { rows } = await db.query('SELECT * FROM rides WHERE id = $1', [rideId]);
-    if (rows.length === 0) return;
+    if (rows.length === 0) {
+        console.error(`[RideManager-Debug] CRITICAL: Ride ${rideId} not found in database.`);
+        return;
+    }
     const ride = rows[0];
 
-    const { rows: vehicleRows } = await db.query(
-        `SELECT dv.category FROM driver_vehicles dv JOIN drivers d ON dv.driver_id = d.id WHERE d.user_id = $1`,
-        [ride.customer_id]
-    );
-    const vehicleCategory = vehicleRows.length > 0 ? vehicleRows[0].category : null; // This logic needs to be adapted based on how vehicle type is selected. For now, we'll assume a placeholder.
-    
+    // 2. Securely get vehicle details from the verified fare token
+    const vehicleCategory = decodedFare.vehicle;
+    const subCategory = decodedFare.sub_category;
+    console.log(`[RideManager-Debug] Ride requires vehicle: ${vehicleCategory} ${subCategory || ''}`);
+
+    // 3. Get driver's city to know where to search
+    const driverResult = await db.query('SELECT city FROM drivers WHERE user_id = $1', [ride.customer_id]);
+    if (driverResult.rows.length === 0) {
+        console.error(`[RideManager-Debug] CRITICAL: Could not determine city for ride ${rideId}. Customer may not have a driver profile.`);
+        // As a fallback, you might try to geocode the pickup location to find the city.
+        // For now, we will stop if the city is unknown.
+        return;
+    }
+    const city = driverResult.rows[0].city;
+    console.log(`[RideManager-Debug] Ride is in city: ${city}`);
+
+    const pickupCoordinates = {
+        latitude: parseFloat(ride.pickup_latitude),
+        longitude: parseFloat(ride.pickup_longitude)
+    };
+
     // --- First Attempt ---
-    const nearbyDrivers1 = await findEligibleDrivers({ latitude: ride.pickup_latitude, longitude: ride.pickup_longitude }, 'pune', 'bike', 1);
+    const nearbyDrivers1 = await findEligibleDrivers(pickupCoordinates, city, vehicleCategory, subCategory, 1);
     if (nearbyDrivers1.length > 0) {
         await redisClient.set(`ride_request:${rideId}`, "attempt_1", { EX: 20 });
         broadcastToDrivers(rideId, ride, nearbyDrivers1);
+    } else {
+        console.log(`[RideManager] No drivers found in the first attempt for ride ${rideId}.`);
     }
 
     // --- Schedule Second Attempt ---
     setTimeout(async () => {
         const currentRide = await db.query('SELECT status FROM rides WHERE id = $1', [rideId]);
         if (currentRide.rows[0]?.status !== 'requested') {
-            return; // Ride was accepted or cancelled, do nothing.
+            console.log(`[RideManager-Debug] Ride ${rideId} is no longer in 'requested' state. Halting second attempt.`);
+            return;
         }
         
         console.log(`[RideManager] Ride ${rideId} not accepted after 20s. Starting second attempt.`);
-        const nearbyDrivers2 = await findEligibleDrivers({ latitude: ride.pickup_latitude, longitude: ride.pickup_longitude }, 'pune', 'bike', 2);
+        const nearbyDrivers2 = await findEligibleDrivers(pickupCoordinates, city, vehicleCategory, subCategory, 2);
         if (nearbyDrivers2.length > 0) {
             await redisClient.set(`ride_request:${rideId}`, "attempt_2", { EX: 20 });
             broadcastToDrivers(rideId, ride, nearbyDrivers2);
+        } else {
+             console.log(`[RideManager] No drivers found in the second attempt for ride ${rideId}.`);
         }
 
         // --- Schedule Final Failure Check ---
         setTimeout(async () => {
             const finalRideCheck = await db.query('SELECT status FROM rides WHERE id = $1', [rideId]);
             if (finalRideCheck.rows[0]?.status !== 'requested') {
+                 console.log(`[RideManager-Debug] Ride ${rideId} was handled. Final check complete.`);
                 return;
             }
 
             console.log(`[RideManager] Ride ${rideId} not accepted after 40s. Cancelling request.`);
             await db.query(`UPDATE rides SET status = 'cancelled' WHERE id = $1`, [rideId]);
 
-            // Notify customer
             const customerSocket = connectionManager.activeCustomerSockets.get(ride.customer_id);
             if (customerSocket && customerSocket.readyState === customerSocket.OPEN) {
                 customerSocket.send(JSON.stringify({
                     type: 'NO_DRIVERS_AVAILABLE',
                     payload: { rideId }
                 }));
+                 console.log(`[RideManager] Notified customer ${ride.customer_id} that no drivers were available.`);
             }
         }, 20000); // 20 seconds for the second attempt
     }, 21000); // 21 seconds to check after the first attempt
