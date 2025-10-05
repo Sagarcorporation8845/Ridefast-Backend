@@ -4,8 +4,6 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const googleMapsService = require('./googleMapsService');
 
-const FARE_ID_EXPIRATION_SECONDS = parseInt(process.env.FARE_ID_EXPIRATION_SECONDS, 10) || 300;
-
 // Creates a SHA256 hash of the route to ensure the fare is tied to the specific journey.
 const createRouteHash = (pickup, dropoff) => {
     const routeString = `${pickup.latitude},${pickup.longitude}|${dropoff.latitude},${dropoff.longitude}`;
@@ -92,7 +90,9 @@ const getFareEstimates = async (pickup, dropoff, userId) => {
                 routeHash,
             };
 
-            const fareId = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: FARE_ID_EXPIRATION });
+            // --- FIX IS HERE ---
+            // Replaced the environment variable with a hardcoded '5m' string for clarity and to fix the bug.
+            const fareId = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '5m' });
 
             return {
                 vehicle_category: rate.vehicle_category,
