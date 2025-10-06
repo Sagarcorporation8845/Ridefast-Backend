@@ -124,7 +124,7 @@ const handleAcceptRide = async (ws, message) => {
                     dv.make,
                     dv.model,
                     dv.color,
-                    dv.license_plate
+                    dv.vehicle_number
                 FROM drivers d
                 JOIN users u ON d.user_id = u.id
                 JOIN driver_vehicles dv ON d.id = dv.driver_id
@@ -140,11 +140,11 @@ const handleAcceptRide = async (ws, message) => {
             const customerSocket = connectionManager.activeCustomerSockets.get(ride.customer_id);
             if (customerSocket) {
 
-                const customerPayload = {
+              const customerPayload = {
                     rideId,
                     otp: ride.otp,
                     driver: {
-                        name: `${driverDetails.first_name} ${driverDetails.last_name}`.trim(),
+                        name: `${driverDetails.first_name} ${driverDetails.last_name || ''}`.trim(),
                         rating: parseFloat(driverDetails.rating),
                         photo_url: driverDetails.profile_image_url
                     },
@@ -152,7 +152,7 @@ const handleAcceptRide = async (ws, message) => {
                         make: driverDetails.make,
                         model: driverDetails.model,
                         color: driverDetails.color,
-                        license_plate: driverDetails.license_plate
+                        license_plate: driverDetails.vehicle_number // Corrected field name
                     }
                 };
                 customerSocket.send(JSON.stringify({ type: 'DRIVER_ASSIGNED', payload: customerPayload }));
