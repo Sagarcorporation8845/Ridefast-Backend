@@ -114,9 +114,11 @@ const handleAcceptRide = async (ws, message) => {
 
             await client.query(`UPDATE drivers SET online_status = 'en_route_to_pickup' WHERE id = $1`, [driverId]);
 
+
             const driverDetailsQuery = `
                 SELECT
-                    u.name,
+                    u.first_name,
+                    u.last_name,
                     u.profile_image_url,
                     d.rating,
                     dv.make,
@@ -137,11 +139,12 @@ const handleAcceptRide = async (ws, message) => {
 
             const customerSocket = connectionManager.activeCustomerSockets.get(ride.customer_id);
             if (customerSocket) {
+
                 const customerPayload = {
                     rideId,
                     otp: ride.otp,
                     driver: {
-                        name: driverDetails.name,
+                        name: `${driverDetails.first_name} ${driverDetails.last_name}`.trim(),
                         rating: parseFloat(driverDetails.rating),
                         photo_url: driverDetails.profile_image_url
                     },

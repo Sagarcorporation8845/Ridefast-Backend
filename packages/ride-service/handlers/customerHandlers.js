@@ -3,7 +3,7 @@ const db = require('../db');
 const { redisClient } = require('../services/redisClient');
 const jwt = require('jsonwebtoken');
 const { manageRideRequest } = require('../services/rideManager');
-const axios = require('axios'); // Ensure axios is in your ride-service package.json
+const axios = require('axios');
 
 /**
  * Searches for drivers in Redis with a dynamically expanding radius.
@@ -231,6 +231,16 @@ const requestRide = async (req, res) => {
 
     } catch (error) {
         await client.query('ROLLBACK');
+
+        if (error.name === 'TokenExpiredError') {
+            console.error('Error requesting ride: JWT token has expired.');
+            return res.status(400).json({ message: 'Your fare quote has expired. Please get a new fare and try again.' });
+        }
+        if (error.name === 'JsonWebTokenError') {
+            console.error('Error requesting ride: Invalid JWT token.');
+            return res.status(400).json({ message: 'The provided fare ID is invalid.' });
+        }
+
         console.error('Error requesting ride:', error);
         res.status(500).json({ message: 'Internal server error.' });
     } finally {
