@@ -80,7 +80,6 @@ const handleLocationUpdate = async (ws, message) => {
             latitude,
             member: driverId.toString(),
         });
-        console.log(`Updated location for online driver ${driverId}`);
     }
 
   } catch (error) {
@@ -93,18 +92,13 @@ const handleAcceptRide = async (ws, message) => {
     const { driverId } = ws.driverInfo;
 
     try {
-        const result = await redisClient.set(`ride_request:${rideId}`, `accepted_by:${driverId}`, {
-            XX: true,
-            GET: true 
-        });
+        const result = await redisClient.set(`ride_request:${rideId}`, `accepted_by:${driverId}`, { XX: true, GET: true });
         
         if (result === null || result.startsWith('accepted_by:')) {
             ws.send(JSON.stringify({ type: 'RIDE_ALREADY_TAKEN', payload: { rideId } }));
             return;
         }
 
-        console.log(`[RideManager] Driver ${driverId} has won ride ${rideId}`);
-        
         const client = await db.getClient();
         try {
             await client.query('BEGIN');
@@ -114,22 +108,51 @@ const handleAcceptRide = async (ws, message) => {
                 [driverId, rideId]
             );
             
-            if (rideUpdateResult.rowCount === 0) {
-                throw new Error('Ride was already accepted by another driver.');
-            }
+            if (rideUpdateResult.rowCount === 0) throw new Error('Ride was already accepted.');
             
             const ride = rideUpdateResult.rows[0];
 
-            // This is the line that was causing the error. It will work now.
             await client.query(`UPDATE drivers SET online_status = 'en_route_to_pickup' WHERE id = $1`, [driverId]);
 
+            const driverDetailsQuery = `
+                SELECT
+                    u.name,
+                    u.profile_image_url,
+                    d.rating,
+                    dv.make,
+                    dv.model,
+                    dv.color,
+                    dv.license_plate
+                FROM drivers d
+                JOIN users u ON d.user_id = u.id
+                JOIN driver_vehicles dv ON d.id = dv.driver_id
+                WHERE d.id = $1
+            `;
+            const { rows: driverDetailsRows } = await client.query(driverDetailsQuery, [driverId]);
+            const driverDetails = driverDetailsRows[0];
+            
             await client.query('COMMIT');
 
             ws.send(JSON.stringify({ type: 'RIDE_CONFIRMED', payload: ride }));
 
             const customerSocket = connectionManager.activeCustomerSockets.get(ride.customer_id);
             if (customerSocket) {
-                customerSocket.send(JSON.stringify({ type: 'DRIVER_ASSIGNED', payload: { rideId, driverId } }));
+                const customerPayload = {
+                    rideId,
+                    otp: ride.otp,
+                    driver: {
+                        name: driverDetails.name,
+                        rating: parseFloat(driverDetails.rating),
+                        photo_url: driverDetails.profile_image_url
+                    },
+                    vehicle: {
+                        make: driverDetails.make,
+                        model: driverDetails.model,
+                        color: driverDetails.color,
+                        license_plate: driverDetails.license_plate
+                    }
+                };
+                customerSocket.send(JSON.stringify({ type: 'DRIVER_ASSIGNED', payload: customerPayload }));
             }
 
         } catch (dbError) {

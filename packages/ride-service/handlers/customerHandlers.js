@@ -129,7 +129,7 @@ const findNearbyDrivers = async (req, res) => {
  */
 const requestRide = async (req, res) => {
     const { fareId, payment_method, use_wallet = false } = req.body;
-    const { userId } = req.user; 
+    const { userId } = req.user;
 
     if (!fareId || !payment_method) {
         return res.status(400).json({ message: 'fareId and payment_method are required.' });
@@ -184,8 +184,6 @@ const requestRide = async (req, res) => {
             }
         }
         
-        // --- START OF FIX ---
-        // 1. Fetch human-readable addresses directly from Google Maps API.
         let pickupAddress = 'Unknown Pickup Location';
         let destinationAddress = 'Unknown Destination';
         try {
@@ -205,15 +203,15 @@ const requestRide = async (req, res) => {
             console.error('[RideRequest] Could not fetch addresses directly from Google:', geoError.message);
         }
 
-        // 2. Create the Ride Record with real addresses and coordinates.
+        const otp = Math.floor(1000 + Math.random() * 9000).toString();
+
         const { pickup, dropoff } = decodedFare;
         const rideResult = await client.query(
-            `INSERT INTO rides (customer_id, pickup_address, destination_address, pickup_latitude, pickup_longitude, destination_latitude, destination_longitude, status, fare, payment_method, wallet_deduction, amount_due)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, 'requested', $8, $9, $10, $11)
+            `INSERT INTO rides (customer_id, pickup_address, destination_address, pickup_latitude, pickup_longitude, destination_latitude, destination_longitude, status, fare, payment_method, wallet_deduction, amount_due, otp)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, 'requested', $8, $9, $10, $11, $12)
              RETURNING id`,
-            [userId, pickupAddress, destinationAddress, pickup.lat, pickup.lng, dropoff.lat, dropoff.lng, totalFare, payment_method, walletDeduction, amountDue]
+            [userId, pickupAddress, destinationAddress, pickup.lat, pickup.lng, dropoff.lat, dropoff.lng, totalFare, payment_method, walletDeduction, amountDue, otp]
         );
-        // --- END OF FIX ---
 
         const rideId = rideResult.rows[0].id;
         
