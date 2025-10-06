@@ -166,7 +166,7 @@ const handleMarkArrived = async (ws, message) => {
         const pickupCoords = { latitude: ride.pickup_latitude, longitude: ride.pickup_longitude };
         
         const distance = getHaversineDistance(driverCoords, pickupCoords);
-        if (distance > 0.2) { // 200 meters
+        if (distance > 0.1) {
             return ws.send(JSON.stringify({ type: 'ERROR', payload: { message: 'You are not close enough to the pickup location.' } }));
         }
 
@@ -178,7 +178,6 @@ const handleMarkArrived = async (ws, message) => {
         const customerSocket = connectionManager.activeCustomerSockets.get(ride.customer_id);
         if (customerSocket) {
             customerSocket.send(JSON.stringify({ type: 'DRIVER_ARRIVED', payload: { rideId } }));
-            console.log(`[RideLifecycle] Notified customer ${ride.customer_id} that driver has arrived for ride ${rideId}.`);
         }
     } catch (error) {
         console.error(`Error handling mark arrived for ride ${rideId}:`, error);
@@ -205,7 +204,6 @@ const handleStartRide = async (ws, message) => {
         const customerSocket = connectionManager.activeCustomerSockets.get(ride.customer_id);
         if (customerSocket) {
             customerSocket.send(JSON.stringify({ type: 'RIDE_STARTED', payload: { rideId } }));
-            console.log(`[RideLifecycle] Notified customer ${ride.customer_id} that ride ${rideId} has started.`);
         }
     } catch (error) {
         console.error(`Error starting ride ${rideId}:`, error);
@@ -214,24 +212,63 @@ const handleStartRide = async (ws, message) => {
 };
 
 const handleEndRide = async (ws, message) => {
-    const { rideId } = message.payload;
+    const { rideId, end_ride_otp } = message.payload;
     const { driverId } = ws.driverInfo;
 
     try {
-        const { rows } = await db.query(`SELECT id, customer_id, payment_method FROM rides WHERE id = $1 AND driver_id = $2 AND status = 'in_progress'`, [rideId, driverId]);
-        if (rows.length === 0) return ws.send(JSON.stringify({ type: 'ERROR', payload: { message: 'Ride cannot be ended in its current state.' } }));
+        const { rows } = await db.query(`SELECT * FROM rides WHERE id = $1 AND driver_id = $2 AND status = 'in_progress'`, [rideId, driverId]);
+        if (rows.length === 0) return ws.send(JSON.stringify({ type: 'ERROR', payload: { message: 'Ride cannot be ended now.' } }));
         const ride = rows[0];
 
-        await db.query(`UPDATE rides SET status = 'completed' WHERE id = $1`, [rideId]);
-        await db.query(`UPDATE drivers SET online_status = 'online' WHERE id = $1`, [driverId]);
+        const driverLocationArray = await redisClient.geoPos(`online_drivers:${ws.driverInfo.city}`, driverId);
+        const driverCoords = { latitude: driverLocationArray[0].latitude, longitude: driverLocationArray[0].longitude };
+        const dropoffCoords = { latitude: ride.destination_latitude, longitude: ride.destination_longitude };
 
-        ws.send(JSON.stringify({ type: 'RIDE_COMPLETED_CONFIRMED', payload: { rideId, payment_method: ride.payment_method } }));
+        const distance = getHaversineDistance(driverCoords, dropoffCoords);
 
-        const customerSocket = connectionManager.activeCustomerSockets.get(ride.customer_id);
-        if (customerSocket) {
-            customerSocket.send(JSON.stringify({ type: 'RIDE_COMPLETED', payload: { rideId } }));
-            console.log(`[RideLifecycle] Notified customer ${ride.customer_id} that ride ${rideId} is complete.`);
+        // Normal Completion
+        if (distance <= 0.1) { // 100 meters threshold
+            await db.query(`UPDATE rides SET status = 'completed' WHERE id = $1`, [rideId]);
+            await db.query(`UPDATE drivers SET online_status = 'online' WHERE id = $1`, [driverId]);
+
+            ws.send(JSON.stringify({ type: 'RIDE_COMPLETED_CONFIRMED', payload: { rideId, payment_method: ride.payment_method } }));
+
+            const customerSocket = connectionManager.activeCustomerSockets.get(ride.customer_id);
+            if (customerSocket) {
+                customerSocket.send(JSON.stringify({ type: 'RIDE_COMPLETED', payload: { rideId } }));
+            }
+            return;
         }
+
+        // Early Completion Logic
+        if (end_ride_otp) {
+            if (ride.end_ride_otp === end_ride_otp) {
+                // OTP matches, complete the ride
+                await db.query(`UPDATE rides SET status = 'completed' WHERE id = $1`, [rideId]);
+                await db.query(`UPDATE drivers SET online_status = 'online' WHERE id = $1`, [driverId]);
+
+                ws.send(JSON.stringify({ type: 'RIDE_COMPLETED_CONFIRMED', payload: { rideId, payment_method: ride.payment_method } }));
+
+                const customerSocket = connectionManager.activeCustomerSockets.get(ride.customer_id);
+                if (customerSocket) {
+                    customerSocket.send(JSON.stringify({ type: 'RIDE_COMPLETED', payload: { rideId } }));
+                }
+            } else {
+                ws.send(JSON.stringify({ type: 'ERROR', payload: { message: 'Invalid End Ride OTP.' } }));
+            }
+        } else {
+            // First attempt to end early: generate and send OTP
+            const newEndOtp = Math.floor(1000 + Math.random() * 9000).toString();
+            await db.query(`UPDATE rides SET end_ride_otp = $1 WHERE id = $2`, [newEndOtp, rideId]);
+
+            ws.send(JSON.stringify({ type: 'REQUIRE_END_RIDE_OTP', payload: { rideId, message: 'You are far from the destination. Please ask the customer for the end ride OTP.' } }));
+
+            const customerSocket = connectionManager.activeCustomerSockets.get(ride.customer_id);
+            if (customerSocket) {
+                customerSocket.send(JSON.stringify({ type: 'END_RIDE_OTP_GENERATED', payload: { rideId, otp: newEndOtp } }));
+            }
+        }
+
     } catch (error) {
         console.error(`Error ending ride ${rideId}:`, error);
         ws.send(JSON.stringify({ type: 'ERROR', payload: { message: 'Could not end ride.' } }));
