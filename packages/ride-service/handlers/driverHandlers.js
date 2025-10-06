@@ -114,23 +114,25 @@ const handleAcceptRide = async (ws, message) => {
 
             await client.query(`UPDATE drivers SET online_status = 'en_route_to_pickup' WHERE id = $1`, [driverId]);
 
-
+    
+            // 1. Corrected the SQL query to use the exact columns from your schema.
             const driverDetailsQuery = `
                 SELECT
-                    u.first_name,
-                    u.last_name,
+                    u.full_name,
                     u.profile_image_url,
                     d.rating,
-                    dv.make,
-                    dv.model,
-                    dv.color,
-                    dv.vehicle_number
+                    dv.model_name,
+                    dv.registration_number
                 FROM drivers d
                 JOIN users u ON d.user_id = u.id
                 JOIN driver_vehicles dv ON d.id = dv.driver_id
                 WHERE d.id = $1
             `;
             const { rows: driverDetailsRows } = await client.query(driverDetailsQuery, [driverId]);
+            
+            if (driverDetailsRows.length === 0) {
+                throw new Error(`Could not find details for driver ${driverId}`);
+            }
             const driverDetails = driverDetailsRows[0];
             
             await client.query('COMMIT');
@@ -139,24 +141,23 @@ const handleAcceptRide = async (ws, message) => {
 
             const customerSocket = connectionManager.activeCustomerSockets.get(ride.customer_id);
             if (customerSocket) {
-
-              const customerPayload = {
+                // 2. Corrected the payload to match the corrected query.
+                const customerPayload = {
                     rideId,
                     otp: ride.otp,
                     driver: {
-                        name: `${driverDetails.first_name} ${driverDetails.last_name || ''}`.trim(),
+                        name: driverDetails.full_name,
                         rating: parseFloat(driverDetails.rating),
                         photo_url: driverDetails.profile_image_url
                     },
                     vehicle: {
-                        make: driverDetails.make,
-                        model: driverDetails.model,
-                        color: driverDetails.color,
-                        license_plate: driverDetails.vehicle_number // Corrected field name
+                        model: driverDetails.model_name,
+                        license_plate: driverDetails.registration_number
                     }
                 };
                 customerSocket.send(JSON.stringify({ type: 'DRIVER_ASSIGNED', payload: customerPayload }));
             }
+           
 
         } catch (dbError) {
             await client.query('ROLLBACK');
