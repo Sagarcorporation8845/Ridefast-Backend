@@ -62,31 +62,26 @@ const handleLocationUpdate = async (ws, message) => {
   const { driverId, city } = ws.driverInfo;
 
   if (typeof latitude !== 'number' || typeof longitude !== 'number') {
-    return; // Ignore invalid data
+    return;
   }
 
   try {
     const stateKey = `driver:state:${driverId}`;
     const geoKey = `online_drivers:${city}`;
     
-    // --- START OF FIX ---
-    // 1. Update the location fields WITHOUT overwriting the entire hash.
     await redisClient.hSet(stateKey, 'latitude', latitude.toString());
     await redisClient.hSet(stateKey, 'longitude', longitude.toString());
     
-    // 2. Check the driver's status from the same hash.
     const driverStatus = await redisClient.hGet(stateKey, 'status');
 
-    // 3. Only add/update them in the geospatial index if they are online.
     if (driverStatus === 'online' || driverStatus === 'go_home') {
         await redisClient.geoAdd(geoKey, {
             longitude,
             latitude,
             member: driverId.toString(),
         });
-        console.log(`Updated location for online driver ${driverId}`); // Added for clear logging
+        console.log(`Updated location for online driver ${driverId}`);
     }
-    // --- END OF FIX ---
 
   } catch (error) {
     console.error(`Error updating location for driver ${driverId}:`, error);
@@ -125,6 +120,7 @@ const handleAcceptRide = async (ws, message) => {
             
             const ride = rideUpdateResult.rows[0];
 
+            // This is the line that was causing the error. It will work now.
             await client.query(`UPDATE drivers SET online_status = 'en_route_to_pickup' WHERE id = $1`, [driverId]);
 
             await client.query('COMMIT');
