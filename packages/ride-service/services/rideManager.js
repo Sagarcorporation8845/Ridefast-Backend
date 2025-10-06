@@ -127,12 +127,13 @@ const manageRideRequest = async (rideId, decodedFare) => {
     const vehicleCategory = decodedFare.vehicle;
     const subCategory = decodedFare.sub_category;
 
-    const cityResult = await db.query(`SELECT city FROM drivers WHERE user_id = $1`, [ride.customer_id]);
-    if (cityResult.rows.length === 0) {
-        console.error(`[RideManager] CRITICAL: Could not determine city for ride ${rideId}. Customer may not have a driver profile.`);
+
+    const city = decodedFare.city;
+    if (!city) {
+        console.error(`[RideManager] CRITICAL: Could not determine city for ride ${rideId}. 'city' is missing from fareId.`);
         return;
     }
-    const city = cityResult.rows[0].city;
+
 
     const pickupCoordinates = {
         latitude: parseFloat(ride.pickup_latitude),
