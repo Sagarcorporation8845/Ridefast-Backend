@@ -2,7 +2,7 @@
 const db = require('../db');
 const { redisClient } = require('../services/redisClient');
 const { connectionManager } = require('../services/rideManager');
-const { getHaversineDistance } = require('../utils/geo'); // We'll move the helper function here
+const { getHaversineDistance } = require('../utils/geo');
 
 const handleStatusChange = async (ws, message) => {
   const { status } = message.payload;
@@ -119,7 +119,6 @@ const handleAcceptRide = async (ws, message) => {
             
             await client.query('COMMIT');
 
-            // **FIX**: OTP is NOT sent to the driver here.
             ws.send(JSON.stringify({ type: 'RIDE_CONFIRMED', payload: ride }));
 
             const customerSocket = connectionManager.activeCustomerSockets.get(ride.customer_id);
@@ -153,14 +152,12 @@ const handleAcceptRide = async (ws, message) => {
     }
 };
 
-// --- NEW HANDLERS ---
-
 const handleMarkArrived = async (ws, message) => {
     const { rideId } = message.payload;
     const { driverId } = ws.driverInfo;
 
     try {
-        const { rows: rideRows } = await db.query(`SELECT id, pickup_latitude, pickup_longitude FROM rides WHERE id = $1 AND driver_id = $2 AND status = 'en_route_to_pickup'`, [rideId, driverId]);
+        const { rows: rideRows } = await db.query(`SELECT id, customer_id, pickup_latitude, pickup_longitude FROM rides WHERE id = $1 AND driver_id = $2 AND status = 'en_route_to_pickup'`, [rideId, driverId]);
         if (rideRows.length === 0) return ws.send(JSON.stringify({ type: 'ERROR', payload: { message: 'Invalid ride or not in correct state.' } }));
         const ride = rideRows[0];
 
@@ -168,8 +165,8 @@ const handleMarkArrived = async (ws, message) => {
         const driverCoords = { latitude: driverLocationArray[0].latitude, longitude: driverLocationArray[0].longitude };
         const pickupCoords = { latitude: ride.pickup_latitude, longitude: ride.pickup_longitude };
         
-        const distance = getHaversineDistance(driverCoords, pickupCoords); // in km
-        if (distance > 0.1) { // 100 meters
+        const distance = getHaversineDistance(driverCoords, pickupCoords);
+        if (distance > 0.2) { // 200 meters
             return ws.send(JSON.stringify({ type: 'ERROR', payload: { message: 'You are not close enough to the pickup location.' } }));
         }
 
@@ -181,6 +178,7 @@ const handleMarkArrived = async (ws, message) => {
         const customerSocket = connectionManager.activeCustomerSockets.get(ride.customer_id);
         if (customerSocket) {
             customerSocket.send(JSON.stringify({ type: 'DRIVER_ARRIVED', payload: { rideId } }));
+            console.log(`[RideLifecycle] Notified customer ${ride.customer_id} that driver has arrived for ride ${rideId}.`);
         }
     } catch (error) {
         console.error(`Error handling mark arrived for ride ${rideId}:`, error);
@@ -193,19 +191,21 @@ const handleStartRide = async (ws, message) => {
     const { driverId } = ws.driverInfo;
 
     try {
-        const { rows } = await db.query(`SELECT id, otp FROM rides WHERE id = $1 AND driver_id = $2 AND status = 'arrived'`, [rideId, driverId]);
+        const { rows } = await db.query(`SELECT id, customer_id, otp FROM rides WHERE id = $1 AND driver_id = $2 AND status = 'arrived'`, [rideId, driverId]);
         if (rows.length === 0 || rows[0].otp !== otp) {
             return ws.send(JSON.stringify({ type: 'ERROR', payload: { message: 'Invalid OTP or ride state.' } }));
         }
+        const ride = rows[0];
 
         await db.query(`UPDATE rides SET status = 'in_progress' WHERE id = $1`, [rideId]);
         await db.query(`UPDATE drivers SET online_status = 'in_ride' WHERE id = $1`, [driverId]);
 
         ws.send(JSON.stringify({ type: 'RIDE_STARTED_CONFIRMED', payload: { rideId } }));
 
-        const customerSocket = connectionManager.activeCustomerSockets.get(rows[0].customer_id);
+        const customerSocket = connectionManager.activeCustomerSockets.get(ride.customer_id);
         if (customerSocket) {
             customerSocket.send(JSON.stringify({ type: 'RIDE_STARTED', payload: { rideId } }));
+            console.log(`[RideLifecycle] Notified customer ${ride.customer_id} that ride ${rideId} has started.`);
         }
     } catch (error) {
         console.error(`Error starting ride ${rideId}:`, error);
@@ -218,28 +218,25 @@ const handleEndRide = async (ws, message) => {
     const { driverId } = ws.driverInfo;
 
     try {
-        const { rows } = await db.query(`SELECT id, payment_method FROM rides WHERE id = $1 AND driver_id = $2 AND status = 'in_progress'`, [rideId, driverId]);
+        const { rows } = await db.query(`SELECT id, customer_id, payment_method FROM rides WHERE id = $1 AND driver_id = $2 AND status = 'in_progress'`, [rideId, driverId]);
         if (rows.length === 0) return ws.send(JSON.stringify({ type: 'ERROR', payload: { message: 'Ride cannot be ended in its current state.' } }));
         const ride = rows[0];
 
-        // TODO: Here you would trigger the payment finalization logic
-        // For now, we just update the status.
-
         await db.query(`UPDATE rides SET status = 'completed' WHERE id = $1`, [rideId]);
-        await db.query(`UPDATE drivers SET online_status = 'online' WHERE id = $1`, [driverId]); // Driver is now free
+        await db.query(`UPDATE drivers SET online_status = 'online' WHERE id = $1`, [driverId]);
 
         ws.send(JSON.stringify({ type: 'RIDE_COMPLETED_CONFIRMED', payload: { rideId, payment_method: ride.payment_method } }));
 
-        const customerSocket = connectionManager.activeCustomerSockets.get(rows[0].customer_id);
+        const customerSocket = connectionManager.activeCustomerSockets.get(ride.customer_id);
         if (customerSocket) {
             customerSocket.send(JSON.stringify({ type: 'RIDE_COMPLETED', payload: { rideId } }));
+            console.log(`[RideLifecycle] Notified customer ${ride.customer_id} that ride ${rideId} is complete.`);
         }
     } catch (error) {
         console.error(`Error ending ride ${rideId}:`, error);
         ws.send(JSON.stringify({ type: 'ERROR', payload: { message: 'Could not end ride.' } }));
     }
 };
-
 
 module.exports = {
   handleStatusChange,
