@@ -8,7 +8,7 @@ const connectionManager = {
 };
 
 /**
- * Finds eligible drivers in an expanding radius, filtered by vehicle category.
+ * Finds eligible drivers in an expanding radius, filtered by vehicle category AND availability.
  */
 const findEligibleDrivers = async (pickupCoordinates, city, vehicleCategory, subCategory, attempt = 1) => {
     const radius = attempt === 1 ? 3 : 7;
@@ -18,10 +18,13 @@ const findEligibleDrivers = async (pickupCoordinates, city, vehicleCategory, sub
         const driverIds = await redisClient.geoSearch(geoKey, pickupCoordinates, { radius, unit: 'km' });
         if (driverIds.length === 0) return [];
 
+        //    Only select drivers whose status is 'online' or 'go_home'.
         let filterQuery = `
             SELECT d.id FROM drivers d
             JOIN driver_vehicles dv ON d.id = dv.driver_id
-            WHERE d.id = ANY($1::uuid[]) AND dv.category = $2
+            WHERE d.id = ANY($1::uuid[]) 
+              AND dv.category = $2
+              AND d.online_status IN ('online', 'go_home') 
         `;
         const queryParams = [driverIds, vehicleCategory];
         
@@ -33,6 +36,7 @@ const findEligibleDrivers = async (pickupCoordinates, city, vehicleCategory, sub
         const { rows } = await db.query(filterQuery, queryParams);
         const eligibleDriverIds = rows.map(row => row.id);
         
+        // Final filter to ensure they have an active WebSocket connection
         return eligibleDriverIds.filter(id => connectionManager.activeDriverSockets.has(id));
     } catch (error) {
         console.error('Error finding eligible drivers:', error);
@@ -126,14 +130,12 @@ const manageRideRequest = async (rideId, decodedFare) => {
 
     const vehicleCategory = decodedFare.vehicle;
     const subCategory = decodedFare.sub_category;
-
-
     const city = decodedFare.city;
+    
     if (!city) {
         console.error(`[RideManager] CRITICAL: Could not determine city for ride ${rideId}. 'city' is missing from fareId.`);
         return;
     }
-
 
     const pickupCoordinates = {
         latitude: parseFloat(ride.pickup_latitude),
