@@ -1,6 +1,7 @@
 // packages/ride-service/services/rideManager.js
 const db = require('../db');
 const { redisClient } = require('../services/redisClient');
+const { getHaversineDistance } = require('../utils/geo');
 
 const connectionManager = {
     activeDriverSockets: new Map(),
@@ -44,23 +45,6 @@ const findEligibleDrivers = async (pickupCoordinates, city, vehicleCategory, sub
     }
 };
 
-/**
- * Calculates the distance between two geo-coordinates using the Haversine formula.
- */
-const getHaversineDistance = (coords1, coords2) => {
-    const toRad = (x) => x * Math.PI / 180;
-    const R = 6371; // Earth's radius in km
-
-    const dLat = toRad(coords2.latitude - coords1.latitude);
-    const dLon = toRad(coords2.longitude - coords1.longitude);
-    const lat1 = toRad(coords1.latitude);
-    const lat2 = toRad(coords2.latitude);
-
-    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-            Math.sin(dLon / 2) * Math.sin(dLon / 2) * Math.cos(lat1) * Math.cos(lat2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c;
-};
 
 /**
  * Broadcasts a ride request to drivers with a personalized, enriched payload.
@@ -103,7 +87,8 @@ const broadcastToDrivers = async (rideId, ride, driverIds, decodedFare) => {
                         distances: {
                             to_pickup_km: `${distanceToPickup} km`,
                             trip_km: `${totalTripDistance} km`
-                        }
+                        },
+                        polyline: decodedFare.polyline,
                     }
                 };
                 

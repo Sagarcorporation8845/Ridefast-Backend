@@ -49,9 +49,25 @@ const forwardGeocode = async (req, res) => {
     }
 };
 
+const getDirections = async (req, res) => {
+    const { originLat, originLng, destinationLat, destinationLng } = req.query;
+
+    if (!originLat || !originLng || !destinationLat || !destinationLng) {
+        return res.status(400).json({ message: 'originLat, originLng, destinationLat, and destinationLng are required.' });
+    }
+
+    try {
+        const data = await googleProxyService.getRouteDetails(originLat, originLng, destinationLat, destinationLng);
+        res.status(200).json(data);
+    } catch (error) {
+        res.status(error.response?.status || 500).json({ message: 'Error fetching directions data.' });
+    }
+};
+
 
 module.exports = {
     reverseGeocode,
     getPlaceAutocomplete,
     forwardGeocode,
+    getDirections, // Export the new controller
 };

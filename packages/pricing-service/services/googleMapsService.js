@@ -105,14 +105,17 @@ const getRouteDetails = async (pickup, dropoff) => {
             throw new Error(`Directions API responded with status: ${response.data.status}`);
         }
 
-        const route = response.data.routes[0].legs[0];
-        const distanceKm = route.distance.value / 1000;
-        const durationMinutes = route.duration.value / 60;
+        const route = response.data.routes[0];
+        const leg = route.legs[0];
+        const distanceKm = leg.distance.value / 1000;
+        const durationMinutes = leg.duration.value / 60;
+        const encodedPolyline = route.overview_polyline.points;
 
         return {
             distanceKm,
             durationMinutes,
             city,
+            encodedPolyline,
         };
 
     } catch (error) {

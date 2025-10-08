@@ -113,9 +113,28 @@ const getPlaceAutocomplete = async (input, sessiontoken, lat, lng) => {
     return response.data;
 };
 
+const getRouteDetails = async (originLat, originLng, destinationLat, destinationLng) => {
+    try {
+        const response = await axios.get(DIRECTIONS_API_URL, {
+            params: {
+                origin: `${originLat},${originLng}`,
+                destination: `${destinationLat},${destinationLng}`,
+                key: GOOGLE_MAPS_API_KEY,
+                units: 'metric',
+            },
+        });
+        return response.data;
+    } catch (error) {
+        console.error("[maps-service] Error fetching directions:", error.response ? error.response.data : error.message);
+        throw error;
+    }
+};
+
+
 module.exports = {
     reverseGeocode,
     forwardGeocode,
     getPlaceAutocomplete,
-    getCityFromCoordinates, // Exporting for potential use in other services if needed
+    getCityFromCoordinates,
+    getRouteDetails, // Export the new function
 };

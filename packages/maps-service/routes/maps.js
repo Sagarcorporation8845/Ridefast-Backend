@@ -1,6 +1,6 @@
 // packages/maps-service/routes/maps.js
 const express = require('express');
-const { reverseGeocode, getPlaceAutocomplete, forwardGeocode } = require('../controllers/mapsController');
+const { reverseGeocode, getPlaceAutocomplete, forwardGeocode, getDirections } = require('../controllers/mapsController');
 const tokenVerify = require('../middleware/token-verify');
 
 const router = express.Router();
@@ -16,5 +16,8 @@ router.get('/places/autocomplete', getPlaceAutocomplete);
 
 // Proxy for Forward Geocoding
 router.get('/geocode/forward', forwardGeocode);
+
+// Proxy for Directions API
+router.get('/directions', getDirections);
 
 module.exports = router;

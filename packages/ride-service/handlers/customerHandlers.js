@@ -128,16 +128,18 @@ const findNearbyDrivers = async (req, res) => {
  * @desc Handles a customer's request to book a ride.
  */
 const requestRide = async (req, res) => {
-    const { fareId, payment_method, use_wallet = false } = req.body;
+    const { fareId, payment_method, polyline, use_wallet = false } = req.body;
     const { userId } = req.user;
 
-    if (!fareId || !payment_method) {
-        return res.status(400).json({ message: 'fareId and payment_method are required.' });
+    if (!fareId || !payment_method || !polyline) {
+        return res.status(400).json({ message: 'fareId, payment_method, and polyline are required.' });
     }
 
     const client = await db.getClient();
     try {
         const decodedFare = jwt.verify(fareId, process.env.JWT_SECRET);
+
+        decodedFare.polyline = polyline;
 
         if (decodedFare.userId !== userId) {
             return res.status(403).json({ message: 'Fare ID does not belong to this user.' });

@@ -27,11 +27,12 @@ const getFareEstimates = async (pickup, dropoff, userId) => {
                         balance: parseFloat(walletBalance)
                     }
                 },
-                options: []
+                options: [],
+                polyline: null
             };
         }
 
-        const { distanceKm, durationMinutes, city } = routeDetails;
+        const { distanceKm, durationMinutes, city, encodedPolyline } = routeDetails;
 
         const cityConfigResult = await db.query(
             `SELECT wallet_enabled FROM servicable_cities WHERE LOWER(city_name) = LOWER($1)`,
@@ -54,7 +55,7 @@ const getFareEstimates = async (pickup, dropoff, userId) => {
         );
 
         if (ratesResult.rows.length === 0) {
-            return { options: [], payment_options: paymentOptions };
+            return { options: [], payment_options: paymentOptions, polyline: encodedPolyline };
         }
 
         const surgeMultiplier = 1.0;
@@ -70,6 +71,7 @@ const getFareEstimates = async (pickup, dropoff, userId) => {
 
             const routeHash = createRouteHash(pickup, dropoff);
             
+            // The JWT payload is now much smaller
             const payload = {
                 userId,
                 fare: roundedFare,
@@ -79,7 +81,7 @@ const getFareEstimates = async (pickup, dropoff, userId) => {
                 pickup: { lat: pickup.latitude, lng: pickup.longitude },
                 dropoff: { lat: dropoff.latitude, lng: dropoff.longitude },
                 trip_distance_km: parseFloat(distanceKm.toFixed(1)),
-                city: city 
+                city: city,
             };
 
             const fareId = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '5m' });
@@ -93,7 +95,7 @@ const getFareEstimates = async (pickup, dropoff, userId) => {
             };
         });
 
-        return { options: estimates, payment_options: paymentOptions };
+        return { options: estimates, payment_options: paymentOptions, polyline: encodedPolyline };
 
     } catch (error) {
         console.error('Error in getFareEstimates:', error);
