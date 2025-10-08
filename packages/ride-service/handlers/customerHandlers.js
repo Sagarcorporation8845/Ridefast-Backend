@@ -5,9 +5,6 @@ const jwt = require('jsonwebtoken');
 const { manageRideRequest } = require('../services/rideManager');
 const axios = require('axios');
 
-/**
- * Searches for drivers in Redis with a dynamically expanding radius.
- */
 const findDriversWithDynamicRadius = async (geoKey, longitude, latitude) => {
     let radius = 0.5;
     const maxRadius = 10;
@@ -27,9 +24,6 @@ const findDriversWithDynamicRadius = async (geoKey, longitude, latitude) => {
     return drivers;
 };
 
-/**
- * @desc Finds nearby online drivers.
- */
 const findNearbyDrivers = async (req, res) => {
   const { latitude, longitude } = req.query;
 
@@ -83,34 +77,35 @@ const findNearbyDrivers = async (req, res) => {
     const categorizedVehicles = {};
 
     for (const driverId of nearbyDriverIds) {
-      const vehicle = vehicleDetails.find(v => v.driver_id === driverId);
-      if (!vehicle) continue;
-
-      const driverLocation = await redisClient.geoPos(finalGeoKey, driverId);
-      if (!driverLocation || !driverLocation[0]) continue;
-
-      const locationData = {
-          driverId: driverId,
-          latitude: parseFloat(driverLocation[0].latitude),
-          longitude: parseFloat(driverLocation[0].longitude)
-      };
-
-      const mainCategory = vehicle.category;
-      const subCategory = vehicle.sub_category;
-
-      if (!categorizedVehicles[mainCategory]) {
-          categorizedVehicles[mainCategory] = subCategory ? {} : [];
+        const vehicle = vehicleDetails.find(v => v.driver_id === driverId);
+        if (!vehicle) continue;
+  
+        const driverState = await redisClient.hGetAll(`driver:state:${driverId}`);
+        if (!driverState || !driverState.latitude || !driverState.longitude) continue;
+  
+        const locationData = {
+            driverId: driverId,
+            latitude: parseFloat(driverState.latitude),
+            longitude: parseFloat(driverState.longitude),
+            bearing: driverState.bearing ? parseFloat(driverState.bearing) : null
+        };
+  
+        const mainCategory = vehicle.category;
+        const subCategory = vehicle.sub_category;
+  
+        if (!categorizedVehicles[mainCategory]) {
+            categorizedVehicles[mainCategory] = subCategory ? {} : [];
+        }
+        
+        if (mainCategory === 'car' && subCategory) {
+            if (!categorizedVehicles.car[subCategory]) {
+                categorizedVehicles.car[subCategory] = [];
+            }
+            categorizedVehicles.car[subCategory].push(locationData);
+        } else if (Array.isArray(categorizedVehicles[mainCategory])) {
+            categorizedVehicles[mainCategory].push(locationData);
+        }
       }
-      
-      if (mainCategory === 'car' && subCategory) {
-          if (!categorizedVehicles.car[subCategory]) {
-              categorizedVehicles.car[subCategory] = [];
-          }
-          categorizedVehicles.car[subCategory].push(locationData);
-      } else if (Array.isArray(categorizedVehicles[mainCategory])) {
-          categorizedVehicles[mainCategory].push(locationData);
-      }
-    }
 
     res.status(200).json({
       message: 'Nearby vehicles retrieved.',
@@ -123,10 +118,6 @@ const findNearbyDrivers = async (req, res) => {
   }
 };
 
-
-/**
- * @desc Handles a customer's request to book a ride.
- */
 const requestRide = async (req, res) => {
     const { fareId, payment_method, polyline, use_wallet = false } = req.body;
     const { userId } = req.user;

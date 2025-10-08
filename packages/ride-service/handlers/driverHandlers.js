@@ -72,7 +72,7 @@ const handleStatusChange = async (ws, message) => {
 };
 
 const handleLocationUpdate = async (ws, message) => {
-  const { latitude, longitude } = message.payload;
+  const { latitude, longitude, bearing } = message.payload;
   const { driverId, city } = ws.driverInfo;
 
   if (typeof latitude !== 'number' || typeof longitude !== 'number') return;
@@ -81,8 +81,13 @@ const handleLocationUpdate = async (ws, message) => {
     const stateKey = `driver:state:${driverId}`;
     const geoKey = `online_drivers:${city}`;
     
-    await redisClient.hSet(stateKey, 'latitude', latitude.toString());
-    await redisClient.hSet(stateKey, 'longitude', longitude.toString());
+    const pipeline = redisClient.multi();
+    pipeline.hSet(stateKey, 'latitude', latitude.toString());
+    pipeline.hSet(stateKey, 'longitude', longitude.toString());
+    if (typeof bearing === 'number') {
+        pipeline.hSet(stateKey, 'bearing', bearing.toString());
+    }
+    await pipeline.exec();
     
     const driverStatus = await redisClient.hGet(stateKey, 'status');
 
@@ -107,7 +112,8 @@ const handleAcceptRide = async (ws, message) => {
         const result = await redisClient.set(`ride_request:${rideId}`, `accepted_by:${driverId}`, { XX: true, GET: true });
         
         if (result === null || result.startsWith('accepted_by:')) {
-            return ws.send(JSON.stringify({ type: 'RIDE_ALREADY_TAKEN', payload: { rideId } }));
+            ws.send(JSON.stringify({ type: 'RIDE_ALREADY_TAKEN', payload: { rideId } }));
+            return null;
         }
 
         const client = await db.getClient();
@@ -135,7 +141,6 @@ const handleAcceptRide = async (ws, message) => {
             const { rows: driverDetailsRows } = await client.query(driverDetailsQuery, [driverId]);
             const driverDetails = driverDetailsRows[0];
             
-            // --- NEW: Get route from driver's location to pickup directly from Google ---
             const driverLocationArray = await redisClient.geoPos(`online_drivers:${city}`, driverId);
             const driverCoords = { 
                 latitude: parseFloat(driverLocationArray[0].latitude), 
@@ -144,12 +149,11 @@ const handleAcceptRide = async (ws, message) => {
             
             let pickupRoutePolyline = null;
             try {
-                // Direct call to Google Maps API
                 const directionsResponse = await axios.get('https://maps.googleapis.com/maps/api/directions/json', {
                     params: {
                         origin: `${driverCoords.latitude},${driverCoords.longitude}`,
                         destination: `${ride.pickup_latitude},${ride.pickup_longitude}`,
-                        key: process.env.GOOGLE_MAPS_API_KEY, // Using the key directly
+                        key: process.env.GOOGLE_MAPS_API_KEY,
                         units: 'metric',
                     },
                 });
@@ -163,17 +167,15 @@ const handleAcceptRide = async (ws, message) => {
 
             await client.query('COMMIT');
 
-            // --- UPDATED: Send BOTH polylines to the driver ---
             ws.send(JSON.stringify({ 
                 type: 'RIDE_CONFIRMED', 
                 payload: {
                     ...ride,
-                    pickupRoutePolyline: pickupRoutePolyline, // Route for driver to get to customer
-                    mainTripPolyline: mainTripPolyline         // Route for the main trip
+                    pickupRoutePolyline: pickupRoutePolyline,
+                    mainTripPolyline: mainTripPolyline
                 } 
             }));
 
-            // --- UPDATED: Send pickup route polyline to the customer ---
             const customerSocket = connectionManager.activeCustomerSockets.get(ride.customer_id);
             if (customerSocket) {
                 const customerPayload = {
@@ -188,10 +190,12 @@ const handleAcceptRide = async (ws, message) => {
                         model: driverDetails.model_name,
                         license_plate: driverDetails.registration_number
                     },
-                    pickupRoutePolyline: pickupRoutePolyline // So the customer can see the driver's path
+                    pickupRoutePolyline: pickupRoutePolyline
                 };
                 customerSocket.send(JSON.stringify({ type: 'DRIVER_ASSIGNED', payload: customerPayload }));
             }
+            
+            return ride;
 
         } catch (dbError) {
             await client.query('ROLLBACK');
@@ -203,9 +207,9 @@ const handleAcceptRide = async (ws, message) => {
     } catch (error) {
         console.error(`Error handling ride acceptance for driver ${driverId} and ride ${rideId}:`, error);
         ws.send(JSON.stringify({ type: 'ERROR', payload: { message: 'Could not accept ride.' } }));
+        return null;
     }
 };
-
 
 const handleMarkArrived = async (ws, message) => {
     const { rideId } = message.payload;

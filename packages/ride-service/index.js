@@ -4,11 +4,11 @@ require('dotenv').config({ path: path.resolve(__dirname, './.env') });
 
 const express = require('express');
 const http = require('http');
-const { WebSocketServer } = require('ws');
+const { WebSocketServer, WebSocket } = require('ws');
 const { authenticateSocket } = require('./middleware/auth');
 const { handleStatusChange, handleLocationUpdate, handleAcceptRide, handleMarkArrived, handleStartRide, handleEndRide } = require('./handlers/driverHandlers');
-const db = require('./db'); // CORRECTED: Import the 'db' object directly
-const { connectRedis } = require('./services/redisClient');
+const db = require('./db');
+const { redisClient, connectRedis } = require('./services/redisClient');
 const customerRoutes = require('./routes/customer');
 const { connectionManager } = require('./services/rideManager');
 
@@ -20,6 +20,8 @@ const PORT = process.env.RIDE_SERVICE_PORT || 3006;
 
 app.use(express.json());
 app.use('/customer', customerRoutes);
+
+const rideLocationBroadcasters = new Map();
 
 function heartbeat() { this.isAlive = true; }
 
@@ -51,10 +53,8 @@ server.on('upgrade', async function upgrade(request, socket, head) {
 });
 
 wss.on('connection', async (ws) => {
-    // --- RECONNECTION LOGIC ---
     if (ws.driverInfo) {
         try {
-            // CORRECTED: Use the 'db' object to query
             const { rows } = await db.query(`SELECT online_status FROM drivers WHERE id = $1`, [ws.driverInfo.driverId]);
             const driverStatus = rows[0]?.online_status;
             const activeRideStates = ['en_route_to_pickup', 'arrived', 'in_ride'];
@@ -86,10 +86,20 @@ wss.on('connection', async (ws) => {
                 switch (type) {
                     case 'status_change': return handleStatusChange(ws, parsedMessage);
                     case 'location_update': return handleLocationUpdate(ws, parsedMessage);
-                    case 'ACCEPT_RIDE': return handleAcceptRide(ws, parsedMessage);
+                    case 'ACCEPT_RIDE':
+                        handleAcceptRide(ws, parsedMessage).then(ride => {
+                            if (ride) {
+                                startBroadcastingDriverLocation(ride.id, ride.driver_id, ride.customer_id);
+                            }
+                        });
+                        return;
                     case 'MARK_ARRIVED': return handleMarkArrived(ws, parsedMessage);
                     case 'START_RIDE': return handleStartRide(ws, parsedMessage);
-                    case 'END_RIDE': return handleEndRide(ws, parsedMessage);
+                    case 'END_RIDE':
+                        handleEndRide(ws, parsedMessage).then(() => {
+                            stopBroadcastingDriverLocation(parsedMessage.payload.rideId);
+                        });
+                        return;
                 }
             }
         } catch (e) {
@@ -103,32 +113,24 @@ wss.on('connection', async (ws) => {
             console.log(`Driver disconnected: ${driverId}`);
             connectionManager.activeDriverSockets.delete(driverId);
 
-            // --- START OF FIX for "GHOST" DRIVERS ---
-            // Set a timeout to check the driver's status after a grace period.
             setTimeout(async () => {
-                // If the driver has reconnected in this time, they will be back in the map.
                 if (connectionManager.activeDriverSockets.has(driverId)) {
                     console.log(`Driver ${driverId} reconnected within grace period.`);
                     return;
                 }
                 
                 try {
-                    // If they haven't reconnected, check their last known status in the database.
                     const { rows } = await db.query(`SELECT online_status FROM drivers WHERE id = $1`, [driverId]);
                     const lastStatus = rows[0]?.online_status;
 
-                    // Only set them offline if they were just 'online' or 'go_home'.
-                    // If they were on an active ride, their status is preserved.
                     if (lastStatus === 'online' || lastStatus === 'go_home') {
                         console.log(`Driver ${driverId} did not reconnect. Setting status to offline.`);
-                        // Simulate a status_change message to run the full offline logic.
                         await handleStatusChange(ws, { payload: { status: 'offline' } });
                     }
                 } catch (error) {
                     console.error(`Error during disconnected driver cleanup for ${driverId}:`, error);
                 }
-            }, 30000); // 30-second grace period for reconnection
-            // --- END OF FIX ---
+            }, 30000);
         }
         if (ws.userInfo) {
             console.log(`Customer disconnected: ${ws.userInfo.userId}`);
@@ -148,11 +150,51 @@ const interval = setInterval(() => {
   });
 }, 30000);
 
+function startBroadcastingDriverLocation(rideId, driverId, customerId) {
+    stopBroadcastingDriverLocation(rideId);
+
+    const intervalId = setInterval(async () => {
+        try {
+            const customerSocket = connectionManager.activeCustomerSockets.get(customerId);
+            if (!customerSocket || customerSocket.readyState !== WebSocket.OPEN) {
+                stopBroadcastingDriverLocation(rideId);
+                return;
+            }
+
+            const driverState = await redisClient.hGetAll(`driver:state:${driverId}`);
+            if (driverState && driverState.latitude && driverState.longitude) {
+                customerSocket.send(JSON.stringify({
+                    type: 'DRIVER_LOCATION_UPDATE',
+                    payload: {
+                        rideId,
+                        latitude: parseFloat(driverState.latitude),
+                        longitude: parseFloat(driverState.longitude),
+                        bearing: driverState.bearing ? parseFloat(driverState.bearing) : null
+                    }
+                }));
+            }
+        } catch (error) {
+            console.error(`Error broadcasting location for ride ${rideId}:`, error);
+        }
+    }, 6000);
+
+    rideLocationBroadcasters.set(rideId, intervalId);
+    console.log(`[LocationBroadcast] Started for ride ${rideId}`);
+}
+
+function stopBroadcastingDriverLocation(rideId) {
+    if (rideLocationBroadcasters.has(rideId)) {
+        clearInterval(rideLocationBroadcasters.get(rideId));
+        rideLocationBroadcasters.delete(rideId);
+        console.log(`[LocationBroadcast] Stopped for ride ${rideId}`);
+    }
+}
+
 app.get('/', (req, res) => res.status(200).send('Ride-Service is running.'));
 
 const startServer = async () => {
-  await db.connectDb(); // Corrected function call
   await connectRedis();
+  await db.connectDb();
   server.listen(PORT, () => console.log(`Ride-Service is listening on port ${PORT}`));
 };
 
