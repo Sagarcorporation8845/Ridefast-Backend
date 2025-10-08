@@ -17,6 +17,25 @@ const handleStatusChange = async (ws, message) => {
 
   try {
     await client.query('BEGIN');
+    // 1. Get the driver's current status from the database to prevent illegal state changes.
+    const { rows } = await client.query("SELECT online_status FROM drivers WHERE id = $1 FOR UPDATE", [driverId]);
+    if (rows.length === 0) throw new Error('Driver not found.');
+    const currentStatus = rows[0].online_status;
+    // 2. Define the states that signify an active ride.
+    const activeRideStates = ['en_route_to_pickup', 'arrived', 'in_ride'];
+    // 3. Protect the active ride states.
+    if (activeRideStates.includes(currentStatus)) {
+        // If a driver is on an active ride, they cannot change their status to 'online' or 'go_home'.
+        // They can only be set to 'offline' (e.g., if they cancel or the system forces it).
+        if (status === 'online' || status === 'go_home') {
+            console.warn(`[STATE-PROTECTION] Driver ${driverId} attempted to change status to '${status}' while in active ride state '${currentStatus}'. Request IGNORED.`);
+            // Inform the app that the request was invalid, so it can correct its UI.
+            ws.send(JSON.stringify({ type: 'ERROR', payload: { message: `Cannot change status while on an active ride. Current status: ${currentStatus}` } }));
+            await client.query('ROLLBACK'); // Abort the transaction.
+            return; // Stop further execution.
+        }
+    }
+    // 4. If the state change is valid, proceed with the update.
     await client.query(
       "UPDATE drivers SET online_status = $1 WHERE id = $2",
       [status, driverId]
@@ -27,7 +46,6 @@ const handleStatusChange = async (ws, message) => {
 
     if (status === 'online' || status === 'go_home') {
       await redisClient.hSet(stateKey, 'status', status);
-      
       const lastLocation = await redisClient.hGetAll(stateKey);
       if (lastLocation && lastLocation.latitude && lastLocation.longitude) {
           await redisClient.geoAdd(geoKey, {
@@ -36,7 +54,6 @@ const handleStatusChange = async (ws, message) => {
               member: driverId.toString(),
           });
       }
-
     } else { // 'offline'
       await redisClient.zRem(geoKey, driverId.toString());
       await redisClient.del(stateKey);
@@ -166,7 +183,7 @@ const handleMarkArrived = async (ws, message) => {
         const pickupCoords = { latitude: ride.pickup_latitude, longitude: ride.pickup_longitude };
         
         const distance = getHaversineDistance(driverCoords, pickupCoords);
-        if (distance > 0.1) {
+        if (distance > 0.1) { 
             return ws.send(JSON.stringify({ type: 'ERROR', payload: { message: 'You are not close enough to the pickup location.' } }));
         }
 
@@ -226,8 +243,7 @@ const handleEndRide = async (ws, message) => {
 
         const distance = getHaversineDistance(driverCoords, dropoffCoords);
 
-        // Normal Completion
-        if (distance <= 0.1) { // 100 meters threshold
+        if (distance <= 0.1) {
             await db.query(`UPDATE rides SET status = 'completed' WHERE id = $1`, [rideId]);
             await db.query(`UPDATE drivers SET online_status = 'online' WHERE id = $1`, [driverId]);
 
@@ -240,10 +256,8 @@ const handleEndRide = async (ws, message) => {
             return;
         }
 
-        // Early Completion Logic
         if (end_ride_otp) {
             if (ride.end_ride_otp === end_ride_otp) {
-                // OTP matches, complete the ride
                 await db.query(`UPDATE rides SET status = 'completed' WHERE id = $1`, [rideId]);
                 await db.query(`UPDATE drivers SET online_status = 'online' WHERE id = $1`, [driverId]);
 
@@ -257,7 +271,6 @@ const handleEndRide = async (ws, message) => {
                 ws.send(JSON.stringify({ type: 'ERROR', payload: { message: 'Invalid End Ride OTP.' } }));
             }
         } else {
-            // First attempt to end early: generate and send OTP
             const newEndOtp = Math.floor(1000 + Math.random() * 9000).toString();
             await db.query(`UPDATE rides SET end_ride_otp = $1 WHERE id = $2`, [newEndOtp, rideId]);
 
