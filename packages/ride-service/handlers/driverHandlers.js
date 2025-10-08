@@ -3,6 +3,7 @@ const db = require('../db');
 const { redisClient } = require('../services/redisClient');
 const { connectionManager } = require('../services/rideManager');
 const { getHaversineDistance } = require('../utils/geo');
+const axios = require('axios'); // Import axios
 
 const handleStatusChange = async (ws, message) => {
   const { status } = message.payload;
@@ -99,8 +100,8 @@ const handleLocationUpdate = async (ws, message) => {
 };
 
 const handleAcceptRide = async (ws, message) => {
-    const { rideId } = message.payload;
-    const { driverId } = ws.driverInfo;
+    const { rideId, polyline: mainTripPolyline } = message.payload;
+    const { driverId, city } = ws.driverInfo;
 
     try {
         const result = await redisClient.set(`ride_request:${rideId}`, `accepted_by:${driverId}`, { XX: true, GET: true });
@@ -134,10 +135,45 @@ const handleAcceptRide = async (ws, message) => {
             const { rows: driverDetailsRows } = await client.query(driverDetailsQuery, [driverId]);
             const driverDetails = driverDetailsRows[0];
             
+            // --- NEW: Get route from driver's location to pickup directly from Google ---
+            const driverLocationArray = await redisClient.geoPos(`online_drivers:${city}`, driverId);
+            const driverCoords = { 
+                latitude: parseFloat(driverLocationArray[0].latitude), 
+                longitude: parseFloat(driverLocationArray[0].longitude) 
+            };
+            
+            let pickupRoutePolyline = null;
+            try {
+                // Direct call to Google Maps API
+                const directionsResponse = await axios.get('https://maps.googleapis.com/maps/api/directions/json', {
+                    params: {
+                        origin: `${driverCoords.latitude},${driverCoords.longitude}`,
+                        destination: `${ride.pickup_latitude},${ride.pickup_longitude}`,
+                        key: process.env.GOOGLE_MAPS_API_KEY, // Using the key directly
+                        units: 'metric',
+                    },
+                });
+
+                if (directionsResponse.data.routes && directionsResponse.data.routes.length > 0) {
+                    pickupRoutePolyline = directionsResponse.data.routes[0].overview_polyline.points;
+                }
+            } catch (dirError) {
+                console.error(`Could not fetch pickup route for ride ${rideId} directly:`, dirError.message);
+            }
+
             await client.query('COMMIT');
 
-            ws.send(JSON.stringify({ type: 'RIDE_CONFIRMED', payload: ride }));
+            // --- UPDATED: Send BOTH polylines to the driver ---
+            ws.send(JSON.stringify({ 
+                type: 'RIDE_CONFIRMED', 
+                payload: {
+                    ...ride,
+                    pickupRoutePolyline: pickupRoutePolyline, // Route for driver to get to customer
+                    mainTripPolyline: mainTripPolyline         // Route for the main trip
+                } 
+            }));
 
+            // --- UPDATED: Send pickup route polyline to the customer ---
             const customerSocket = connectionManager.activeCustomerSockets.get(ride.customer_id);
             if (customerSocket) {
                 const customerPayload = {
@@ -151,7 +187,8 @@ const handleAcceptRide = async (ws, message) => {
                     vehicle: {
                         model: driverDetails.model_name,
                         license_plate: driverDetails.registration_number
-                    }
+                    },
+                    pickupRoutePolyline: pickupRoutePolyline // So the customer can see the driver's path
                 };
                 customerSocket.send(JSON.stringify({ type: 'DRIVER_ASSIGNED', payload: customerPayload }));
             }
@@ -168,6 +205,7 @@ const handleAcceptRide = async (ws, message) => {
         ws.send(JSON.stringify({ type: 'ERROR', payload: { message: 'Could not accept ride.' } }));
     }
 };
+
 
 const handleMarkArrived = async (ws, message) => {
     const { rideId } = message.payload;
