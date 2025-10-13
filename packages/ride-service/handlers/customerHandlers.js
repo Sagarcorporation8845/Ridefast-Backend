@@ -2,7 +2,7 @@
 const db = require('../db');
 const { redisClient } = require('../services/redisClient');
 const jwt = require('jsonwebtoken');
-const { manageRideRequest } = require('../services/rideManager');
+const { manageRideRequest, connectionManager } = require('../services/rideManager');
 const axios = require('axios');
 
 const findDriversWithDynamicRadius = async (geoKey, longitude, latitude) => {
@@ -241,7 +241,71 @@ const requestRide = async (req, res) => {
     }
 };
 
+const cancelRide = async (req, res) => {
+    const { rideId } = req.params;
+    const { userId } = req.user;
+
+    const client = await db.getClient();
+    try {
+        await client.query('BEGIN');
+
+        // Find the ride and lock the row for update
+        const rideResult = await client.query(
+            `SELECT id, customer_id, driver_id, status FROM rides WHERE id = $1 AND customer_id = $2 FOR UPDATE`,
+            [rideId, userId]
+        );
+
+        if (rideResult.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ message: 'Ride not found or you are not authorized to cancel it.' });
+        }
+
+        const ride = rideResult.rows[0];
+        const cancellableStates = ['requested', 'en_route_to_pickup'];
+
+        if (!cancellableStates.includes(ride.status)) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ message: `Cannot cancel a ride with status: ${ride.status}.` });
+        }
+
+        // Update ride status to 'cancelled'
+        await client.query(
+            `UPDATE rides SET status = 'cancelled' WHERE id = $1`,
+            [rideId]
+        );
+
+        // If a driver was assigned, update their status and notify them
+        if (ride.driver_id) {
+            await client.query(
+                `UPDATE drivers SET online_status = 'online' WHERE id = $1`,
+                [ride.driver_id]
+            );
+
+            const driverSocket = connectionManager.activeDriverSockets.get(ride.driver_id);
+            if (driverSocket && driverSocket.readyState === driverSocket.OPEN) {
+                driverSocket.send(JSON.stringify({
+                    type: 'RIDE_CANCELLED',
+                    payload: { rideId }
+                }));
+            }
+        }
+
+        await client.query('COMMIT');
+
+        res.status(200).json({ message: 'Ride cancelled successfully.' });
+
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error(`Error cancelling ride ${rideId}:`, error);
+        res.status(500).json({ message: 'Internal server error.' });
+    } finally {
+        client.release();
+    }
+};
+
+
 module.exports = {
   findNearbyDrivers,
   requestRide,
+  cancelRide,
 };
