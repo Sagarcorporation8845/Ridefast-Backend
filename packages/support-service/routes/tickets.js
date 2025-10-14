@@ -13,6 +13,18 @@ const {
     getUserTickets
 } = require('../controllers/ticketController');
 
+// --- USER/DRIVER ROUTES ---
+// These routes MUST come before any routes with dynamic /:id parameters.
+
+// Create a ticket as a user/driver
+router.post('/user', tokenVerify, validate(schemas.createUserTicket), createUserTicket);
+
+// Get the user's/driver's own ticket history
+router.get('/user', tokenVerify, getUserTickets);
+
+
+// --- AGENT-SPECIFIC ROUTES ---
+
 // Create new ticket by an agent
 router.post('/', 
     authenticateAgent,
@@ -26,7 +38,7 @@ router.get('/',
     getAgentTickets
 );
 
-// Get specific ticket details
+// Get specific ticket details (This now comes AFTER /user)
 router.get('/:id', 
     authenticateAgent,
     checkTicketAccess,
@@ -48,19 +60,5 @@ router.post('/:id/messages',
     validate(schemas.addTicketMessage),
     addTicketMessage
 );
-
-// Get ticket messages (already included in getTicketDetails)
-router.get('/:id/messages', 
-    authenticateAgent,
-    checkTicketAccess,
-    (req, res) => {
-        // Redirect to ticket details which includes messages
-        res.redirect(`/tickets/${req.params.id}`);
-    }
-);
-
-// --- Routes for Customers and Drivers ---
-router.post('/user', tokenVerify, validate(schemas.createUserTicket), createUserTicket);
-router.get('/user', tokenVerify, getUserTickets);
 
 module.exports = router;
