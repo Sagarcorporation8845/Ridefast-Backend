@@ -350,6 +350,105 @@ const addTicketMessage = async (req, res) => {
     }
 };
 
+const createUserTicket = async (req, res) => {
+    try {
+        const { userId } = req.user;
+        const { subject, description, priority = 'normal' } = req.body;
+
+        // Determine the user's city
+        let userCity = null;
+        const driverResult = await query('SELECT city FROM drivers WHERE user_id = $1', [userId]);
+
+        if (driverResult.rows.length > 0) {
+            userCity = driverResult.rows[0].city;
+        } else {
+            const rideResult = await query(
+                `SELECT d.city
+                 FROM rides r
+                 JOIN drivers d ON r.driver_id = d.id
+                 WHERE r.customer_id = $1
+                 ORDER BY r.created_at DESC
+                 LIMIT 1`,
+                [userId]
+            );
+            if (rideResult.rows.length > 0) {
+                userCity = rideResult.rows[0].city;
+            }
+        }
+
+        if (!userCity) {
+            return res.status(400).json({
+                error: {
+                    type: 'VALIDATION_ERROR',
+                    message: 'Could not determine your city. Please complete a ride to submit a ticket.',
+                    timestamp: new Date()
+                }
+            });
+        }
+
+        // Create the ticket
+        const result = await query(
+            `INSERT INTO support_tickets (customer_id, city, subject, description, priority, status)
+             VALUES ($1, $2, $3, $4, $5, 'open')
+             RETURNING *`,
+            [userId, userCity, subject, description, priority]
+        );
+
+        const newTicket = result.rows[0];
+
+        // Attempt to auto-assign the ticket
+        const assignmentEngine = new TicketAssignmentEngine();
+        await assignmentEngine.assignTicket(newTicket.id, userCity);
+
+        res.status(201).json({
+            success: true,
+            message: 'Support ticket created successfully.',
+            data: newTicket
+        });
+
+    } catch (error) {
+        console.error('Error creating user ticket:', error);
+        res.status(500).json({
+            error: {
+                type: 'DATABASE_ERROR',
+                message: 'Failed to create ticket.',
+                timestamp: new Date()
+            }
+        });
+    }
+};
+
+const getUserTickets = async (req, res) => {
+    try {
+        const { userId } = req.user;
+
+        const result = await query(
+            `SELECT st.id, st.subject, st.status, st.priority, st.created_at, ps.full_name as assigned_agent_name
+             FROM support_tickets st
+             LEFT JOIN platform_staff ps ON st.assigned_agent_id = ps.id
+             WHERE st.customer_id = $1
+             ORDER BY st.created_at DESC`,
+            [userId]
+        );
+
+        res.json({
+            success: true,
+            data: {
+                tickets: result.rows
+            }
+        });
+
+    } catch (error) {
+        console.error('Error fetching user tickets:', error);
+        res.status(500).json({
+            error: {
+                type: 'DATABASE_ERROR',
+                message: 'Failed to fetch tickets.',
+                timestamp: new Date()
+            }
+        });
+    }
+};
 
 
 module.exports = {
@@ -357,5 +456,7 @@ module.exports = {
     getAgentTickets,
     getTicketDetails,
     updateTicketStatus,
-    addTicketMessage
+    addTicketMessage,
+    createUserTicket,
+    getUserTickets
 };

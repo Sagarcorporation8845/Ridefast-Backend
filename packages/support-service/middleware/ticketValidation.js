@@ -32,6 +32,12 @@ const schemas = {
         priority: Joi.string().valid('low', 'normal', 'high', 'urgent').default('normal'),
         type: Joi.string().valid('text', 'voice_call').default('text')
     }),
+    
+    createUserTicket: Joi.object({
+        subject: Joi.string().min(5).max(255).required(),
+        description: Joi.string().min(10).max(2000).required(),
+        priority: Joi.string().valid('low', 'normal', 'high', 'urgent').default('normal')
+    }),
 
     updateTicketStatus: Joi.object({
         status: Joi.string().valid('open', 'in_progress', 'pending_customer', 'resolved', 'closed').required()

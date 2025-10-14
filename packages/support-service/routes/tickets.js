@@ -1,16 +1,19 @@
 const express = require('express');
 const router = express.Router();
 const { authenticateAgent, checkTicketAccess } = require('../middleware/ticketAuth');
+const tokenVerify = require('../middleware/token-verify');
 const { validate, schemas } = require('../middleware/ticketValidation');
 const { 
     createTicket, 
     getAgentTickets, 
     getTicketDetails, 
     updateTicketStatus, 
-    addTicketMessage 
+    addTicketMessage,
+    createUserTicket,
+    getUserTickets
 } = require('../controllers/ticketController');
 
-// Create new ticket
+// Create new ticket by an agent
 router.post('/', 
     authenticateAgent,
     validate(schemas.createTicket),
@@ -55,5 +58,9 @@ router.get('/:id/messages',
         res.redirect(`/tickets/${req.params.id}`);
     }
 );
+
+// --- Routes for Customers and Drivers ---
+router.post('/user', tokenVerify, validate(schemas.createUserTicket), createUserTicket);
+router.get('/user', tokenVerify, getUserTickets);
 
 module.exports = router;
