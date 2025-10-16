@@ -9,6 +9,49 @@ const connectionManager = {
 };
 
 /**
+ * Forwards a WebRTC signaling message to the correct recipient in an active ride.
+ */
+const forwardSignalingMessage = async (ws, type, payload) => {
+    const { rideId } = payload;
+    if (!rideId) {
+        console.error('[Signaling] Received signaling message without rideId');
+        return;
+    }
+
+    try {
+        const { rows } = await db.query('SELECT customer_id, driver_id FROM rides WHERE id = $1', [rideId]);
+        if (rows.length === 0) {
+            console.error(`[Signaling] Ride not found for rideId: ${rideId}`);
+            return;
+        }
+
+        const ride = rows[0];
+        let targetSocket = null;
+
+        // Determine who the recipient is
+        if (ws.driverInfo && ws.driverInfo.driverId === ride.driver_id) {
+            // Message is from the driver, send to the customer
+            targetSocket = connectionManager.activeCustomerSockets.get(ride.customer_id);
+        } else if (ws.userInfo && ws.userInfo.userId === ride.customer_id) {
+            // Message is from the customer, send to the driver
+            targetSocket = connectionManager.activeDriverSockets.get(ride.driver_id);
+        }
+
+        if (targetSocket && targetSocket.readyState === targetSocket.OPEN) {
+            // Forward the message
+            targetSocket.send(JSON.stringify({ type, payload }));
+            console.log(`[Signaling] Forwarded '${type}' for ride ${rideId}`);
+        } else {
+            console.warn(`[Signaling] Target user for ride ${rideId} is not connected.`);
+        }
+
+    } catch (error) {
+        console.error(`[Signaling] Error forwarding message for ride ${rideId}:`, error);
+    }
+};
+
+
+/**
  * Finds eligible drivers in an expanding radius, filtered by vehicle category AND availability.
  */
 const findEligibleDrivers = async (pickupCoordinates, city, vehicleCategory, subCategory, attempt = 1) => {
@@ -167,4 +210,5 @@ const manageRideRequest = async (rideId, decodedFare) => {
 module.exports = {
     manageRideRequest,
     connectionManager,
+    forwardSignalingMessage,
 };

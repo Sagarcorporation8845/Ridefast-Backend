@@ -10,7 +10,8 @@ const { handleStatusChange, handleLocationUpdate, handleAcceptRide, handleMarkAr
 const db = require('./db');
 const { redisClient, connectRedis } = require('./services/redisClient');
 const customerRoutes = require('./routes/customer');
-const { connectionManager } = require('./services/rideManager');
+const webrtcRoutes = require('./routes/webrtc'); // ADD THIS LINE
+const { connectionManager, forwardSignalingMessage } = require('./services/rideManager');
 
 const app = express();
 const server = http.createServer(app);
@@ -20,6 +21,7 @@ const PORT = process.env.RIDE_SERVICE_PORT || 3006;
 
 app.use(express.json());
 app.use('/customer', customerRoutes);
+app.use('/webrtc', webrtcRoutes); // ADD THIS LINE
 
 const rideLocationBroadcasters = new Map();
 
@@ -80,7 +82,23 @@ wss.on('connection', async (ws) => {
     ws.on('message', (message) => {
         try {
             const parsedMessage = JSON.parse(message.toString());
-            const type = parsedMessage.type;
+            const { type, payload } = parsedMessage;
+
+            // ---  CALL SIGNALING LOGIC ---
+            const signalingTypes = [
+                'initiate-call',
+                'call-accepted',
+                'call-offer',
+                'call-answer',
+                'ice-candidate',
+                'end-call'
+            ];
+
+            if (signalingTypes.includes(type)) {
+                // This function will forward the message to the other party in the ride
+                forwardSignalingMessage(ws, type, payload);
+                return;
+            }
 
             if (ws.driverInfo) {
                 switch (type) {
