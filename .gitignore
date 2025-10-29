@@ -21,6 +21,7 @@ pids
 .env.test
 .env.production
 .env.*.local
+.yml
 
 # OS-specific files
 .DS_Store
