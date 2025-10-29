@@ -10,7 +10,8 @@ const {
     updateTicketStatus, 
     addTicketMessage,
     createUserTicket,
-    getUserTickets
+    getUserTickets,
+    escalateTicket
 } = require('../controllers/ticketController');
 
 // --- USER/DRIVER ROUTES ---
@@ -24,6 +25,12 @@ router.get('/user', tokenVerify, getUserTickets);
 
 
 // --- AGENT-SPECIFIC ROUTES ---
+
+router.get(
+    '/my-active-tickets', // A new, unambiguous path
+    authenticateAgent,
+    getAgentTickets
+);
 
 // Create new ticket by an agent
 router.post('/', 
@@ -61,4 +68,11 @@ router.post('/:id/messages',
     addTicketMessage
 );
 
+//Ticket Escaltion Endpoint
+router.post(
+    '/:id/escalate',
+    tokenVerify,
+    validate(schemas.escalateTicket),
+    escalateTicket
+);
 module.exports = router;

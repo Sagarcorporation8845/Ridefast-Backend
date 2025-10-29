@@ -1,4 +1,4 @@
-const { query } = require('../db');
+const { query, dbService } = require('../db');
 
 class TicketAssignmentEngine {
     constructor() {
@@ -34,7 +34,7 @@ class TicketAssignmentEngine {
                 return null;
             }
             
-            const assignedAgentId = await this.assignToAgent(ticketId, selectedAgent.id);
+            const assignedAgentId = await this.findAgentAndAssignAtomically(ticketId, city); // Use the correct function name
             
             if (assignedAgentId) {
                 console.log(`[TicketAssignmentEngine] Successfully assigned ticket ${ticketId} to agent ${assignedAgentId}`);
@@ -79,67 +79,180 @@ class TicketAssignmentEngine {
     }
 
     /**
+     * Attempts to assign ONE waiting ticket to a specific agent who just became available.
+     * @param {string} agentId - The agent who just became available.
+     * @param {string} city - The city of the agent.
+     * @returns {Promise<boolean>} - True if a ticket was successfully assigned, false otherwise.
+     */
+    async assignSingleWaitingTicket(agentId, city) {
+        try {
+            console.log(`[TicketAssignmentEngine] Agent ${agentId} became available in ${city}. Checking for waiting tickets.`);
+
+            //Double-checking the agent capacity (should be < max)
+            const agentStatus = await query(
+                'SELECT COALESCE(active_tickets_count, 0) as count FROM agent_status WHERE agent_id = $1',
+                [agentId]
+            );
+            const currentCount = agentStatus.rows[0]?.count || 0;
+            if (currentCount >= this.maxTicketsPerAgent) {
+                console.log(`[TicketAssignmentEngine] Agent ${agentId} is still at capacity.`);
+                return false;
+            }
+
+            //Finding the highest priority unassigned ticket in the agent's city
+            const waitingTicket = await query(`
+                SELECT st.id
+                FROM support_tickets st
+                WHERE st.city = $1 
+                  AND st.assigned_agent_id IS NULL 
+                  AND st.status IN ('open', 'in_progress') 
+                  AND st.escalation_level = 'none'
+                ORDER BY 
+                    CASE st.priority 
+                        WHEN 'urgent' THEN 1 WHEN 'high' THEN 2 WHEN 'normal' THEN 3 WHEN 'low' THEN 4 
+                    END,
+                    st.created_at ASC
+                LIMIT 1 
+            `, [city]);
+
+            if (waitingTicket.rows.length === 0) {
+                console.log(`[TicketAssignmentEngine] No waiting tickets found for agent ${agentId} in ${city}.`);
+                return false;
+            }
+
+            const ticketIdToAssign = waitingTicket.rows[0].id;
+
+            //Attempting to assign this specific ticket using the atomic function
+            const assignedAgentId = await this.findAgentAndAssignAtomically(ticketIdToAssign, city, agentId); // Pass specific agent
+
+            if (assignedAgentId === agentId) {
+                console.log(`[TicketAssignmentEngine] Successfully assigned waiting ticket ${ticketIdToAssign} to agent ${agentId}.`);
+                await this.notifyAgent(agentId, ticketIdToAssign);
+                return true;
+            } else {
+                console.log(`[TicketAssignmentEngine] Waiting ticket ${ticketIdToAssign} was assigned to someone else or failed assignment.`);
+                return false;
+            }
+
+        } catch (error) {
+            console.error(`[TicketAssignmentEngine] Error in assignSingleWaitingTicket for agent ${agentId}:`, error);
+            return false;
+        }
+    }
+
+    /**
      * Assign a ticket to a specific agent
      * @param {string} ticketId - The ticket ID
      * @param {string} agentId - The agent ID
      * @returns {Promise<string|null>} - Returns agent ID if successful, null otherwise
      */
-    async assignToAgent(ticketId, agentId) {
-        const client = await require('../db').query('SELECT 1'); // Get a client from pool
-        
+    /**
+     * Finds an available agent and assigns the ticket within a single, 
+     * locked transaction using dbService.connect() and client.release().
+     */
+ async findAgentAndAssignAtomically(ticketId, city) {
         try {
-            // Start transaction
             await query('BEGIN');
             
-            // Double-check agent capacity
-            const capacityCheck = await query(
-                'SELECT COALESCE(active_tickets_count, 0) as count FROM agent_status WHERE agent_id = $1',
-                [agentId]
+            //Locking the agent's status row within the transaction.
+            const agentResult = await query(
+                `SELECT 
+                     ps.id, 
+                     COALESCE(ast.active_tickets_count, 0) as count
+                 FROM platform_staff ps
+                 LEFT JOIN agent_status ast ON ps.id = ast.agent_id
+                 WHERE LOWER(ps.city) = LOWER($1)
+                   AND ps.role = 'support' 
+                   AND ps.status = 'active'
+                   AND COALESCE(ast.status, 'offline') = 'online'
+                   AND COALESCE(ast.active_tickets_count, 0) < $2
+                 ORDER BY COALESCE(ast.active_tickets_count, 0) ASC, RANDOM()
+                 LIMIT 1
+                 FOR UPDATE OF ps`, 
+                [city, this.maxTicketsPerAgent]
             );
-            
-            const currentCount = capacityCheck.rows[0]?.count || 0;
-            if (currentCount >= this.maxTicketsPerAgent) {
+
+            if (agentResult.rows.length === 0) {
                 await query('ROLLBACK');
-                console.log(`[TicketAssignmentEngine] Agent ${agentId} at capacity during assignment`);
-                return null;
+                console.log(`[TicketAssignmentEngine - findAgentAndAssign] No agents available in city ${city}.`);
+                return null; 
             }
             
-            // Update ticket assignment
+            const selectedAgentId = agentResult.rows[0].id;
+            const currentCountBeforeAssign = agentResult.rows[0].count; 
+
+            console.log(`[DEBUG] Selected Agent ${selectedAgentId}, Current Count (locked): ${currentCountBeforeAssign}`);
+
+            //Assigning the ticket to this agent.
             const ticketUpdate = await query(
                 `UPDATE support_tickets 
-                 SET assigned_agent_id = $1, assigned_at = NOW(), 
+                 SET assigned_agent_id = $1, assigned_at = NOW(),
                      status = CASE WHEN status = 'open' THEN 'in_progress' ELSE status END
                  WHERE id = $2 AND assigned_agent_id IS NULL
-                 RETURNING id, assigned_agent_id`,
-                [agentId, ticketId]
+                 RETURNING id`,
+                [selectedAgentId, ticketId]
             );
-            
+
             if (ticketUpdate.rows.length === 0) {
                 await query('ROLLBACK');
-                console.log(`[TicketAssignmentEngine] Ticket ${ticketId} already assigned or not found`);
+                console.log(`[TicketAssignmentEngine - findAgentAndAssign] Ticket ${ticketId} was already assigned.`);
                 return null;
             }
-            
-            // Record assignment history
+
+            //Manually UPSERT the agent's active ticket count.
+            console.log(`[DEBUG] Attempting to increment count for Agent ${selectedAgentId}`);
+            const upsertResult = await query(
+                `INSERT INTO agent_status (agent_id, active_tickets_count)
+                 VALUES ($1, 1)
+                 ON CONFLICT (agent_id) DO UPDATE
+                 SET active_tickets_count = agent_status.active_tickets_count + 1
+                 RETURNING active_tickets_count`,
+                [selectedAgentId]
+            );
+             console.log(`[DEBUG] Upsert complete. New count for Agent ${selectedAgentId}: ${upsertResult.rows[0]?.active_tickets_count}`);
+
+
+            //Record assignment history
             await query(
                 `INSERT INTO ticket_assignments (ticket_id, agent_id, assignment_type)
                  VALUES ($1, $2, 'automatic')`,
-                [ticketId, agentId]
+                [ticketId, selectedAgentId]
             );
-            
-            // The trigger will automatically update agent_status.active_tickets_count
-            
+
             await query('COMMIT');
-            return agentId;
+            console.log(`[TicketAssignmentEngine - findAgentAndAssign] Transaction committed for ticket ${ticketId}, agent ${selectedAgentId}`);
+            return selectedAgentId;
+
+        } catch (error) {
+            try { await query('ROLLBACK'); } catch (rbErr) { console.error('Rollback failed:', rbErr); }
+            console.error('[TicketAssignmentEngine - findAgentAndAssign] Error:', error); 
+            return null;
+        }
+    }
+      
+     async assignTicket(ticketId, city) {
+        try {
+            console.log(`[TicketAssignmentEngine] Attempting to assign ticket ${ticketId} in city ${city}`);
+            
+            const assignedAgentId = await this.findAgentAndAssignAtomically(ticketId, city); 
+            
+            if (assignedAgentId) {
+                console.log(`[TicketAssignmentEngine] Successfully assigned ticket ${ticketId} to agent ${assignedAgentId}`);
+                await this.notifyAgent(assignedAgentId, ticketId);
+                return assignedAgentId;
+            } else {
+                console.log(`[TicketAssignmentEngine] No available agents or all agents at capacity in city ${city}`);
+                await this.alertCityAdmin(city, 'no_agents_available_or_capacity', { ticketId }); 
+                return null;
+            }
             
         } catch (error) {
-            await query('ROLLBACK');
-            console.error('[TicketAssignmentEngine] Error in assignToAgent:', error);
+            console.error(`[TicketAssignmentEngine] Error assigning ticket ${ticketId}:`, error);
             return null;
         }
     }
 
-    /**
+     /**
      * Reassign a ticket from one agent to another
      * @param {string} ticketId - The ticket ID
      * @param {string} fromAgentId - Current agent ID (can be null)
@@ -363,7 +476,7 @@ class TicketAssignmentEngine {
                 }
                 
                 // Assign the ticket
-                const assigned = await this.assignToAgent(ticket.id, agentId);
+                const assigned = await this.findAgentAndAssignAtomically(ticket.id, city);
                 if (assigned) {
                     assignedCount++;
                     console.log(`[TicketAssignmentEngine] Assigned unassigned ticket ${ticket.id} to agent ${agentId}`);
@@ -396,6 +509,7 @@ class TicketAssignmentEngine {
                 WHERE st.city = $1 
                 AND st.assigned_agent_id IS NULL 
                 AND st.status IN ('open', 'in_progress')
+                AND st.escalation_level = 'none'
                 ORDER BY 
                     CASE st.priority 
                         WHEN 'urgent' THEN 1 

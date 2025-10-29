@@ -58,6 +58,11 @@ const schemas = {
 
     updateAgentStatus: Joi.object({
         status: Joi.string().valid('online', 'offline', 'busy').required()
+    }),
+    
+    // NEW SCHEMA for escalating a ticket
+    escalateTicket: Joi.object({
+        reason: Joi.string().min(10).max(1000).required()
     })
 };
 
