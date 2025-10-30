@@ -43,11 +43,13 @@ app.get('/health', (req, res) => {
     });
 });
 
+const dashboardRoutes = require('./routes/dashboard');
+
 // Routes
 app.use('/admin/agents', require('./routes/agents'));
 app.use('/admin/tickets', require('./routes/tickets'));
-app.use('/admin/cities', require('./routes/cities')); // Add this line
-
+app.use('/admin/cities', require('./routes/cities')); 
+app.use('/admin/dashboard', dashboardRoutes);
 
 // 404 handler
 app.use('*', (req, res) => {
