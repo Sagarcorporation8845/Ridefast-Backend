@@ -24,7 +24,8 @@ const updateAgentStatus = async (req, res) => {
                 `SELECT COUNT(*) as count 
                  FROM support_tickets 
                  WHERE assigned_agent_id = $1 
-                 AND status NOT IN ('resolved', 'closed')`,
+                 AND status NOT IN ('resolved', 'closed')
+                 AND escalation_level = 'none'`,
                 [agentId]
             );
             
