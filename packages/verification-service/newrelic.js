@@ -3,7 +3,7 @@
 exports.config = {
   
   app_name: ['verification-service'],
-  license_key: process.env.NEW_RELIC_LICENSE_KEY,
+  license_key: 'eu01xxb447f1ca7e3413b2902c8432f6FFFFNRAL',
   
   logging: {
     level: 'info'
