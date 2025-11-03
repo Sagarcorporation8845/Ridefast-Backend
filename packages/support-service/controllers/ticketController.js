@@ -547,7 +547,7 @@ const escalateTicket = async (req, res) => {
         }
         
         await query(
-            `UPDATE support_tickets SET escalation_level = $1 WHERE id = $2`,
+            `UPDATE support_tickets SET escalation_level = $1, assigned_agent_id = NULL WHERE id = $2`,
             [nextLevel, ticketId]
         );
 
