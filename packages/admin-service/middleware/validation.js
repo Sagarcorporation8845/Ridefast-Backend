@@ -44,6 +44,10 @@ const schemas = {
 
     agentStatusUpdate: Joi.object({
         status: Joi.string().valid('online', 'offline', 'busy').required()
+    }),
+
+    adminResolveTicket: Joi.object({
+        resolution_message: Joi.string().min(10).max(2000).required()
     })
 };
 

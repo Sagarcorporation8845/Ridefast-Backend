@@ -5,7 +5,7 @@ exports.config = {
   app_name: ['User-Service'], 
   
   // ⬇️ PASTE YOUR INGEST-LICENSE KEY HERE
-  license_key: 'eu01xxb447f1ca7e3413b2902c8432f6FFFFNRAL',
+  license_key:  process.env.NEW_RELIC_LICENSE_KEY,
   
   logging: {
     level: 'info'

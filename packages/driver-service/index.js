@@ -1,4 +1,5 @@
 // packages/driver-service/index.js
+require('newrelic');
 const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, './.env') });
 
