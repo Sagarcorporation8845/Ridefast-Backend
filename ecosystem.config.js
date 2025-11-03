@@ -1,73 +1,86 @@
 require('dotenv').config(); // Make sure to load .env variables
-
 module.exports = {
-    apps : [{
+  apps : [
+    {
       name   : "api-gateway",
-      script : "./index.js",
-      watch: false,
+      script : "./packages/api-gateway/index.js",
+      watch  : false,
       env: {
-        PORT: 3000
+        "PORT": 3000,
+        "NEW_RELIC_LICENSE_KEY": "eu01xx6dd3b63a254db8837480b83b43FFFFNRAL"
       }
-    }, {
+    },
+    {
       name   : "user-service",
       script : "./packages/user-service/index.js",
-      watch: false,
+      watch  : false,
       env: {
-        PORT: process.env.USER_SERVICE_PORT || 3001
+        "PORT": 3001,
+        "NEW_RELIC_LICENSE_KEY": "eu01xx6dd3b63a254db8837480b83b43FFFFNRAL"
       }
-    }, {
+    },
+    {
       name   : "driver-service",
       script : "./packages/driver-service/index.js",
-      watch: false,
+      watch  : false,
       env: {
-        PORT: process.env.DRIVER_SERVICE_PORT || 3002
+        "PORT": 3002,
+        "NEW_RELIC_LICENSE_KEY": "eu01xx6dd3b63a254db8837480b83b43FFFFNRAL"
       }
-    }, {
+    },
+    {
       name   : "support-service",
       script : "./packages/support-service/index.js",
-      watch: false,
+      watch  : false,
       env: {
-        PORT: process.env.SUPPORT_SERVICE_PORT || 3003
+        "PORT": 3003,
+        "NEW_RELIC_LICENSE_KEY": "eu01xx6dd3b63a254db8837480b83b43FFFFNRAL"
       }
-    }, {
+    },
+    {
       name   : "admin-service",
       script : "./packages/admin-service/index.js",
-      watch: false,
+      watch  : false,
       env: {
-        PORT: process.env.ADMIN_SERVICE_PORT || 3004
+        "PORT": 3004,
+        "NEW_RELIC_LICENSE_KEY": "eu01xx6dd3b63a254db8837480b83b43FFFFNRAL"
       }
-    }, {
+    },
+    {
       name   : "verification-service",
       script : "./packages/verification-service/index.js",
-      watch: false,
+      watch  : false,
       env: {
-        PORT: process.env.VERIFICATION_SERVICE_PORT || 3005
+        "PORT": 3005,
+        "NEW_RELIC_LICENSE_KEY": "eu01xx6dd3b63a254db8837480b83b43FFFFNRAL"
       }
-    }, {
+    },
+    {
       name   : "ride-service",
       script : "./packages/ride-service/index.js",
-      watch: false,
+      watch  : false,
       env: {
-        PORT: process.env.RIDE_SERVICE_PORT || 3006
+        "PORT": 3006,
+        "NEW_RELIC_LICENSE_KEY": "eu01xx6dd3b63a254db8837480b83b43FFFFNRAL"
       }
-    }, {
+    },
+    {
       name   : "pricing-service",
       script : "./packages/pricing-service/index.js",
-      watch: false,
+      watch  : false,
       env: {
-        PORT: process.env.PRICING_SERVICE_PORT || 3007
+        "PORT": 3007,
+        "NEW_RELIC_LICENSE_KEY": "eu01xx6dd3b63a254db8837480b83b43FFFFNRAL"
       }
-    }, {
+    },
+    {
       name   : "maps-service",
       script : "./packages/maps-service/index.js",
-      watch: false,
+      watch  : false,
       env: {
-        PORT: process.env.MAPS_SERVICE_PORT || 3008
+        "PORT": 3008,
+        "NEW_RELIC_LICENSE_KEY": "eu01xx6dd3b63a254db8837480b83b43FFFFNRAL"
       }
-    } ]
-  }
-
-
-
-  
-  
+    }
+  ]
+};
