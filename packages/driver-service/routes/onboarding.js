@@ -113,9 +113,10 @@ router.post('/vehicle-details', tokenVerify, async (req, res) => {
 
     const standardizedRegNumber = registrationNumber.replace(/[\s-]/g, '').toUpperCase();
     
-    const registrationNumberRegex = /^[A-Z]{2}[0-9]{2}[A-Z]{2}[0-9]{4}$/;
+    // Updated REGEX to be more flexible (e.g., MH12AB1234)
+    const registrationNumberRegex = /^[A-Z]{2}[0-9]{1,2}[A-Z]{1,3}[0-9]{1,4}$/;
     if (!registrationNumberRegex.test(standardizedRegNumber)) {
-        return res.status(400).json({ message: 'Please enter a correct vehicle number. Follow this format: MH01AB1234' });
+        return res.status(400).json({ message: 'Please enter a correct vehicle number. Format: MH12AB1234' });
     }
 
     try {
@@ -152,7 +153,7 @@ const storage = multer.diskStorage({
             const driverId = driverResult.rows[0].id;
             const dir = path.join(__dirname, '..', 'uploads', driverId.toString());
             
-            req.driverId = driverId;
+            req.driverId = driverId; // Attach driverId to request for the handler
 
             fs.mkdir(dir, { recursive: true }, err => {
                 if (err) return cb(err, null);
@@ -195,21 +196,23 @@ router.post('/upload-document', tokenVerify, (req, res) => {
         if (err instanceof multer.MulterError) {
             return res.status(400).json({ message: `File upload error: ${err.message}` });
         } else if (err) {
+            // Handle custom errors from storage/fileFilter
             return res.status(400).json({ message: err.message });
         }
+        // If no error, proceed to the handler
         _handleDocumentUpload(req, res);
     });
 });
 
 async function _handleDocumentUpload(req, res) {
     const { documentType } = req.body;
-    const driverId = req.driverId; 
+    const driverId = req.driverId; // This was attached by the multer storage engine
     
     if (!req.file) {
         return res.status(400).json({ message: 'No file was uploaded.' });
     }
     if (!documentType) {
-        fs.unlinkSync(req.file.path);
+        fs.unlinkSync(req.file.path); // Clean up the orphaned file
         return res.status(400).json({ message: 'documentType is required.' });
     }
 
@@ -230,6 +233,7 @@ async function _handleDocumentUpload(req, res) {
         );
 
         if (existingDoc.rows.length > 0) {
+            // Document already exists, so we UPDATE it
             const oldFileUrl = existingDoc.rows[0].file_url;
             await db.query(
                 `UPDATE driver_documents 
@@ -238,6 +242,7 @@ async function _handleDocumentUpload(req, res) {
                 [fileUrl, existingDoc.rows[0].id]
             );
 
+            // Clean up the old file
             if (oldFileUrl) {
                 const oldFilePath = path.join(__dirname, '..', oldFileUrl);
                 fs.unlink(oldFilePath, (err) => {
@@ -250,6 +255,7 @@ async function _handleDocumentUpload(req, res) {
             });
 
         } else {
+            // This is a new document, so we INSERT it
             await db.query(
                 'INSERT INTO driver_documents (driver_id, document_type, file_url, status) VALUES ($1, $2, $3, $4)',
                 [driverId, documentType.toLowerCase(), fileUrl, 'pending']
@@ -261,54 +267,90 @@ async function _handleDocumentUpload(req, res) {
         }
 
     } catch (err) {
-        fs.unlinkSync(req.file.path); 
+        fs.unlinkSync(req.file.path); // Clean up file on DB error
         console.error('Error saving document:', err);
         res.status(500).json({ message: 'Internal server error' });
     }
 }
 
 
+// --- [THIS IS THE UPDATED ENDPOINT] ---
 // --- Verification Status Endpoint ---
 router.get('/status', tokenVerify, async (req, res) => {
     const userId = req.user.userId;
     try {
+        // Step 1: Check if a driver profile even exists
         const driverResult = await db.query(
-            'SELECT id, is_verified FROM drivers WHERE user_id = $1',
+            'SELECT id, is_verified, status FROM drivers WHERE user_id = $1',
             [userId]
         );
 
         if (driverResult.rows.length === 0) {
-            return res.status(404).json({ message: 'Driver profile not found.' });
+            // The user has a 'driver' role but has not even completed the first step.
+            // Tell the app to navigate to the personal details screen.
+            return res.status(200).json({ 
+                onboardingStep: 'personal_details' 
+            });
         }
 
         const driver = driverResult.rows[0];
+        const driverId = driver.id;
 
-        if (driver.is_verified) {
-            return res.status(200).json({ isVerified: true });
+        // Step 2: Check if they are already fully verified
+        if (driver.is_verified && driver.status === 'active') {
+            return res.status(200).json({ 
+                onboardingStep: 'verified_complete' 
+            });
         }
 
+        // Step 3: Check if they have any rejected documents
         const rejectedDocsResult = await db.query(
             `SELECT document_type, rejection_reason 
              FROM driver_documents 
              WHERE driver_id = $1 AND status = 'rejected'`,
-            [driver.id]
+            [driverId]
         );
 
         if (rejectedDocsResult.rows.length > 0) {
             return res.status(200).json({
-                isVerified: false,
-                status: 'rejected',
+                onboardingStep: 'documents_rejected',
                 rejectedDocuments: rejectedDocsResult.rows.map(doc => ({
                     documentType: doc.document_type,
                     reason: doc.rejection_reason
                 }))
             });
-        } else {
-            return res.status(200).json({
-                isVerified: false,
-                status: 'pending'
+        }
+        
+        // Step 4: Check if they've submitted vehicle details
+        const vehicleResult = await db.query('SELECT id FROM driver_vehicles WHERE driver_id = $1', [driverId]);
+
+        if (vehicleResult.rows.length === 0) {
+            // They finished personal details but not vehicle.
+            return res.status(200).json({ 
+                onboardingStep: 'vehicle_details' 
             });
         }
+
+        // Step 5: Check if they have uploaded all documents
+        // We know 4 documents are required: 'license', 'rc', 'photo', 'aadhaar'
+        const docsResult = await db.query(
+            'SELECT document_type, status FROM driver_documents WHERE driver_id = $1', 
+            [driverId]
+        );
+
+        // This checks if all required documents have been uploaded (at least 4)
+        if (docsResult.rows.length < 4) {
+            // They finished vehicle but not all documents are uploaded.
+            return res.status(200).json({
+                onboardingStep: 'document_upload',
+                uploadedDocuments: docsResult.rows.map(d => d.document_type) // Helps UI show "License (Uploaded)"
+            });
+        }
+
+        // Step 6: If all checks pass, they have uploaded all docs but are not verified.
+        return res.status(200).json({
+            onboardingStep: 'pending_verification'
+        });
 
     } catch (err) {
         console.error('Error fetching driver status:', err);

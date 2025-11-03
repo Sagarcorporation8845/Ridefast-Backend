@@ -13,8 +13,6 @@
     "start:pricing-service": "cross-env PORT=3007 nodemon packages/pricing-service/index.js",
     "start:maps-service": "cross-env PORT=3008 nodemon packages/maps-service/index.js",
     "dev": "concurrently \"npm:start\" \"npm:start:user-service\" \"npm:start:driver-service\" \"npm:start:support-service\" \"npm:start:admin-service\" \"npm:start:verification-service\" \"npm:start:ride-service\" \"npm:start:pricing-service\" \"npm:start:maps-service\" "
-
- 
   },
   "keywords": [],
   "author": "",
@@ -25,6 +23,7 @@
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "http-proxy-middleware": "^3.0.0",
+    "newrelic": "^13.6.2",
     "pg": "^8.16.3"
   },
   "devDependencies": {
