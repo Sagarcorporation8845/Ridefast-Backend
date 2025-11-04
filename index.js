@@ -1,5 +1,4 @@
 // ridefast-backend/index.js
-require('newrelic');
 const express = require('express');
 const { createProxyMiddleware } = require('http-proxy-middleware');
 const cors = require('cors');
