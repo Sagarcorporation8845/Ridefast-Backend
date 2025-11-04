@@ -1,5 +1,4 @@
 // packages/verification-service/index.js
-require('newrelic');
 const path = require('path'); // Import the path module
 require('dotenv').config({ path: path.resolve(__dirname, './.env') }); // FIX: Provide a specific path
 
