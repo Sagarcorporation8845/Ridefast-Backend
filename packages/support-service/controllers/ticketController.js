@@ -241,43 +241,45 @@ const getTicketDetails = async (req, res) => {
     }
 };
 
-// Update ticket status
+/**
+ * Updates a ticket's status and handles agent count changes.
+ * If a ticket is resolved/closed, it tries to assign a new ticket.
+ */
 const updateTicketStatus = async (req, res) => {
     const { id: ticketId } = req.params;
     const { status } = req.body;
-    // We assume the agent calling this is the one assigned, 
-    // or an admin (middleware should handle authorization if needed)
     
     let assignedAgentIdBeforeUpdate = null;
-    let cityOfTicket = null; // Store city for potential reassignment
+    let cityOfTicket = null;
     let statusBeforeUpdate = null;
+    let agentBecameAvailable = false;
 
     try {
         // --- Use high-level query for transaction ---
         await query('BEGIN');
 
-        // Fetch current ticket details (including assigned agent and city)
+        // Fetch current ticket state and lock the row
         const ticketResult = await query(
-            // Use FOR UPDATE even with high-level query to ensure lock
             'SELECT id, status, assigned_agent_id, city FROM support_tickets WHERE id = $1 FOR UPDATE', 
             [ticketId]
         );
-        if (ticketResult.rows.length === 0) {
+        if (ticketResult.rows.length === 0) { 
             await query('ROLLBACK');
             return res.status(404).json({ error: { message: 'Ticket not found' } });
         }
+        
         const currentTicket = ticketResult.rows[0];
-        assignedAgentIdBeforeUpdate = currentTicket.assigned_agent_id; 
-        cityOfTicket = currentTicket.city; // Store city
-        statusBeforeUpdate = currentTicket.status; // Store old status
+        assignedAgentIdBeforeUpdate = currentTicket.assigned_agent_id;
+        cityOfTicket = currentTicket.city;
+        statusBeforeUpdate = currentTicket.status;
 
         // --- Status transition validation ---
         const validTransitions = {
              'open': ['in_progress'],
              'in_progress': ['pending_customer', 'resolved'],
              'pending_customer': ['in_progress', 'resolved'],
-             'resolved': ['closed', 'open'], // Can reopen
-             'closed': ['open'] // Can reopen
+             'resolved': ['closed', 'open'],
+             'closed': ['open']
          };
         if (!validTransitions[currentTicket.status]?.includes(status)) {
             await query('ROLLBACK');
@@ -287,70 +289,51 @@ const updateTicketStatus = async (req, res) => {
         // --- Build Update Query ---
         let updateQuery = 'UPDATE support_tickets SET status = $1';
         const params = [status, ticketId];
-        let paramIndex = 3; // Start params for additional SET clauses from $3
-
-        if (status === 'resolved' && currentTicket.status !== 'resolved') {
-            updateQuery += `, resolved_at = NOW()`;
-        } else if (status === 'closed' && currentTicket.status !== 'closed') {
-             updateQuery += `, closed_at = NOW()`;
-        } else if (status === 'open' && (currentTicket.status === 'resolved' || currentTicket.status === 'closed')) {
-             // Reset timestamps if reopening
-             updateQuery += `, resolved_at = NULL, closed_at = NULL`; 
-        } 
-        // Add other timestamp logic if needed
-
+        if (status === 'resolved' && currentTicket.status !== 'resolved') updateQuery += `, resolved_at = NOW()`;
+        else if (status === 'closed' && currentTicket.status !== 'closed') updateQuery += `, closed_at = NOW()`;
+        else if (status === 'open' && (currentTicket.status === 'resolved' || currentTicket.status === 'closed')) updateQuery += `, resolved_at = NULL, closed_at = NULL`;
         updateQuery += ` WHERE id = $2 RETURNING *`;
         
         const result = await query(updateQuery, params);
         const updatedTicket = result.rows[0];
 
-        // --- Decrement/Increment Count Logic ---
-        let countWasChanged = false;
-        let agentBecameAvailable = false;
-        if (assignedAgentIdBeforeUpdate) {
+        // --- Manually Increment/Decrement Count ---
+        if (assignedAgentIdBeforeUpdate) { 
              if (['resolved', 'closed'].includes(status) && !['resolved', 'closed'].includes(statusBeforeUpdate)) {
-                 // Decrement because ticket is completed
                  await query(
                      `UPDATE agent_status SET active_tickets_count = GREATEST(active_tickets_count - 1, 0) WHERE agent_id = $1`,
                      [assignedAgentIdBeforeUpdate]
                  );
-                 countWasChanged = true;
-                 agentBecameAvailable = true;
-                 console.log(`[DEBUG] Decremented count for agent ${assignedAgentIdBeforeUpdate} due to status ${status}`);
+                 agentBecameAvailable = true; 
+                 console.log(`[DEBUG updateTicketStatus] Decremented count for agent ${assignedAgentIdBeforeUpdate}`);
              } else if (!['resolved', 'closed'].includes(status) && ['resolved', 'closed'].includes(statusBeforeUpdate)) {
-                 // Increment in case ticket is reopened
                  await query(
                      `INSERT INTO agent_status (agent_id, active_tickets_count) VALUES ($1, 1)
                       ON CONFLICT (agent_id) DO UPDATE SET active_tickets_count = agent_status.active_tickets_count + 1`,
                      [assignedAgentIdBeforeUpdate]
                  );
-                  countWasChanged = true;
-                  console.log(`[DEBUG] Incremented count for agent ${assignedAgentIdBeforeUpdate} due to reopen`);
+                  console.log(`[DEBUG updateTicketStatus] Incremented count for agent ${assignedAgentIdBeforeUpdate} due to reopen`);
              }
         }
-
+        
         await query('COMMIT');
         
         // --- Trigger Assignment if Agent Became Available ---
         if (agentBecameAvailable && assignedAgentIdBeforeUpdate && cityOfTicket) {
-             console.log(`[updateTicketStatus] Agent ${assignedAgentIdBeforeUpdate} completed a ticket. Checking for waiting tickets in ${cityOfTicket}.`);
+             console.log(`[updateTicketStatus] Agent ${assignedAgentIdBeforeUpdate} completed a ticket. Checking for waiting tickets...`);
              const assignmentEngine = new TicketAssignmentEngine();
-             assignmentEngine.assignSingleWaitingTicket(assignedAgentIdBeforeUpdate, cityOfTicket)
+             assignmentEngine.assignWaitingTicket(assignedAgentIdBeforeUpdate, cityOfTicket)
                  .catch(err => console.error("Error during post-resolution assignment:", err)); 
         }
         
-        res.json({
-            success: true,
-            data: { ticket: updatedTicket }
-        });
+        res.json({ success: true, data: { ticket: updatedTicket } });
         
     } catch (error) {
-        try { await query('ROLLBACK'); } 
-        catch (rbErr) { console.error('Rollback failed:', rbErr); }
-        
+        try { await query('ROLLBACK'); } catch (rbErr) { console.error('Rollback failed:', rbErr); }
         console.error('Error updating ticket status:', error);
-        res.status(500).json({ error: { message: 'Failed to update ticket status' } });
-    } 
+        res.status(500).json({ error: { message: error.message || 'Failed to update ticket status' } });
+    }
+    // No 'finally' block needed
 };
 
 // Add message to ticket
@@ -500,65 +483,69 @@ const getUserTickets = async (req, res) => {
 /**
  * Escalates a support ticket and frees up the agent's capacity.
  */
-
 const escalateTicket = async (req, res) => {
     const { id: ticketId } = req.params;
     const { reason } = req.body;
-    const { userId: agentId, role, city, fullName: agentName } = req.user;
-
+    const { userId: agentId, role, city } = req.user;
+    
+    let assignedAgentIdBeforeUpdate = null;
+    let cityOfTicket = null;
+    let agentBecameAvailable = false;
+    
     try {
         await query('BEGIN');
 
         // Fetch agent name for the audit log
         const agentResult = await query('SELECT full_name FROM platform_staff WHERE id = $1', [agentId]);
-        if (agentResult.rows.length === 0) {
-            await query('ROLLBACK');
-            return res.status(404).json({ message: 'Escalating agent not found.' });
-        }
-        const agentNameFromDb = agentResult.rows[0].full_name;
+        const agentName = agentResult.rows[0]?.full_name || 'Agent';
 
+        // Get and lock the ticket
         const ticketResult = await query(
             `SELECT id, city, status, escalation_level, assigned_agent_id FROM support_tickets WHERE id = $1 FOR UPDATE`,
             [ticketId]
         );
-
-        if (ticketResult.rows.length === 0) {
-            await query('ROLLBACK');
-            return res.status(404).json({ message: 'Ticket not found.' });
-        }
+        if (ticketResult.rows.length === 0) { throw new Error('Ticket not found.'); }
         const ticket = ticketResult.rows[0];
+        assignedAgentIdBeforeUpdate = ticket.assigned_agent_id;
+        cityOfTicket = ticket.city;
 
-        // Authorization & Business Rule Checks
+        // --- Authorization & Business Rule Checks ---
         if (role === 'support' && ticket.escalation_level !== 'none') {
-            await query('ROLLBACK');
-            return res.status(400).json({ message: 'This ticket has already been escalated.' });
+            throw new Error('This ticket has already been escalated.');
         }
         if (role === 'city_admin' && ticket.escalation_level !== 'city_admin') {
-            await query('ROLLBACK');
-            return res.status(400).json({ message: 'This ticket is not at your current escalation level.' });
+            throw new Error('This ticket is not at your current escalation level.');
         }
-        
+        if (role !== 'central_admin' && ticket.city.toLowerCase() !== city.toLowerCase()) {
+            throw new Error('Access denied. You can only escalate tickets in your own city.');
+        }
+        if (ticket.status === 'resolved' || ticket.status === 'closed') {
+            throw new Error('Cannot escalate a resolved or closed ticket.');
+        }
+
         let nextLevel;
         if (role === 'support') nextLevel = 'city_admin';
         else if (role === 'city_admin') nextLevel = 'central_admin';
-        else {
-            await query('ROLLBACK');
-            return res.status(400).json({ message: 'No higher level to escalate to.' });
-        }
+        else { throw new Error('No higher level to escalate to.'); }
         
+        // Step 1: Update the ticket's escalation level
         await query(
             `UPDATE support_tickets SET escalation_level = $1 WHERE id = $2`,
             [nextLevel, ticketId]
         );
 
-        if (ticket.assigned_agent_id) {
+        // Step 2: Manually decrement the agent's active ticket count
+        if (assignedAgentIdBeforeUpdate) {
             await query(
                 `UPDATE agent_status SET active_tickets_count = GREATEST(active_tickets_count - 1, 0) WHERE agent_id = $1`,
-                [ticket.assigned_agent_id]
+                [assignedAgentIdBeforeUpdate]
             );
+            agentBecameAvailable = true;
+            console.log(`[DEBUG escalateTicket] Decremented count for agent ${assignedAgentIdBeforeUpdate}`);
         }
-        
-        const escalationMessage = `Ticket escalated to ${nextLevel} by ${agentNameFromDb}. Reason: ${reason}`;
+
+        // Step 3: Add an internal note for the audit trail
+        const escalationMessage = `Ticket escalated to ${nextLevel} by ${agentName}. Reason: ${reason}`;
         await query(
             `INSERT INTO ticket_messages (ticket_id, sender_id, sender_type, message, is_internal)
              VALUES ($1, $2, 'agent', $3, true)`,
@@ -566,19 +553,23 @@ const escalateTicket = async (req, res) => {
         );
 
         await query('COMMIT');
+        
+        // --- Trigger Assignment if Agent Became Available ---
+        if (agentBecameAvailable && assignedAgentIdBeforeUpdate && cityOfTicket) {
+             console.log(`[escalateTicket] Agent ${assignedAgentIdBeforeUpdate} escalated a ticket. Checking for waiting tickets...`);
+             const assignmentEngine = new TicketAssignmentEngine();
+             assignmentEngine.assignWaitingTicket(assignedAgentIdBeforeUpdate, cityOfTicket)
+                 .catch(err => console.error("Error during post-escalation assignment:", err)); 
+        }
 
         res.status(200).json({ message: `Ticket successfully escalated to ${nextLevel}.` });
 
     } catch (error) {
-        try {
-            await query('ROLLBACK');
-        } catch (rollbackError) {
-            console.error('Failed to rollback transaction:', rollbackError);
-        }
+        try { await query('ROLLBACK'); } catch (rbErr) { console.error('Rollback failed:', rbErr); }
         console.error('Error escalating ticket:', error);
-        res.status(500).json({ message: 'Internal server error.' });
+        res.status(500).json({ message: error.message || 'Internal server error.' });
     }
-   
+    // No 'finally' block needed
 };
 
 module.exports = {

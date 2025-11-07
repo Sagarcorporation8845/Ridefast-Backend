@@ -2,7 +2,7 @@
 'use strict'
 exports.config = {
   // ⬇️ SET A UNIQUE NAME FOR EACH SERVICE
-  app_name: ['User-Service'], 
+  app_name: ['Support-Service'], 
   
   // ⬇️ PASTE YOUR INGEST-LICENSE KEY HERE
   license_key: process.env.NEW_RELIC_LICENSE_KEY,

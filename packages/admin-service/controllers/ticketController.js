@@ -5,47 +5,74 @@ const getReassignmentCandidates = async (req, res) => {
     try {
         const { ticketId } = req.query;
         
+        if (!ticketId) {
+            return res.status(400).json({ error: { type: 'VALIDATION_ERROR', message: 'ticketId is required.' }});
+        }
+        
+        // --- Get Ticket Details ---
         let ticketQuery = `
             SELECT st.id, st.city, st.assigned_agent_id
             FROM support_tickets st
             WHERE st.id = $1
         `;
         
-        // Apply city filtering
-        if (req.user.role === 'city_admin') {
-            ticketQuery += ' AND st.city = $2';
-        }
+        const ticketParams = [ticketId];
         
-        const ticketParams = req.user.role === 'city_admin' 
-            ? [ticketId, req.user.city] 
-            : [ticketId];
+        if (req.user.role === 'city_admin') {
+            ticketQuery += ' AND LOWER(st.city) = LOWER($2)';
+            ticketParams.push(req.user.city);
+        }
             
         const ticketResult = await query(ticketQuery, ticketParams);
         
         if (ticketResult.rows.length === 0) {
-            return res.status(404).json({
-                error: {
-                    type: 'RESOURCE_NOT_FOUND',
-                    message: 'Ticket not found or access denied',
-                    timestamp: new Date()
-                }
-            });
+            return res.status(404).json({ /*... Ticket not found error ...*/ });
         }
         
         const ticket = ticketResult.rows[0];
-        
-        // Get available agents in the same city
+
+        // --- THIS QUERY IS NOW ENHANCED ---
         const agentsQuery = `
-            SELECT ps.id, ps.full_name, ps.email, ps.city,
-                   ast.status as online_status, ast.active_tickets_count
+            SELECT 
+                ps.id, 
+                ps.full_name, 
+                ps.email, 
+                ps.city,
+                COALESCE(ast.status, 'offline') as online_status, 
+                COALESCE(ast.active_tickets_count, 0) as active_tickets_count,
+                (COALESCE(ast.active_tickets_count, 0) < 2) as can_assign_immediately,
+                
+                -- This new subquery counts queued tickets for each agent
+                COALESCE(q_counts.queued_count, 0) as queued_tickets_count
+
             FROM platform_staff ps
+            
             LEFT JOIN agent_status ast ON ps.id = ast.agent_id
-            WHERE ps.role = 'support' 
-            AND ps.city = $1 
-            AND ps.status = 'active'
-            AND ps.id != COALESCE($2, '00000000-0000-0000-0000-000000000000'::uuid)
-            ORDER BY ast.active_tickets_count ASC, ps.full_name ASC
+            
+            -- New join to a subquery that counts queued tickets
+            LEFT JOIN (
+                SELECT
+                    queued_for_agent_id,
+                    COUNT(id) as queued_count
+                FROM support_tickets
+                WHERE
+                    status = 'open' AND queued_for_agent_id IS NOT NULL
+                GROUP BY queued_for_agent_id
+            ) q_counts ON ps.id = q_counts.queued_for_agent_id
+
+            WHERE 
+                ps.role = 'support'
+                AND ps.status = 'active'
+                AND LOWER(TRIM(ps.city)) = LOWER(TRIM($1))
+                AND ps.id != COALESCE($2, '00000000-0000-0000-0000-000000000000'::uuid) 
+            
+            ORDER BY
+                CASE WHEN COALESCE(ast.status, 'offline') = 'online' THEN 1 ELSE 2 END ASC,
+                active_tickets_count ASC, 
+                queued_tickets_count ASC, -- Also sort by who has the smallest queue
+                ps.full_name ASC
         `;
+        // --- END OF MODIFIED QUERY ---
         
         const agentsResult = await query(agentsQuery, [ticket.city, ticket.assigned_agent_id]);
         
@@ -54,9 +81,11 @@ const getReassignmentCandidates = async (req, res) => {
             fullName: row.full_name,
             email: row.email,
             city: row.city,
-            onlineStatus: row.online_status || 'offline',
-            activeTicketsCount: row.active_tickets_count || 0,
-            canAssign: (row.active_tickets_count || 0) < 2
+            onlineStatus: row.online_status,
+            activeTicketsCount: parseInt(row.active_tickets_count, 10),
+            canAssignImmediately: row.can_assign_immediately,
+            // --- NEW FIELD ADDED TO RESPONSE ---
+            queuedTicketsCount: parseInt(row.queued_tickets_count, 10) 
         }));
         
         res.json({
@@ -73,13 +102,7 @@ const getReassignmentCandidates = async (req, res) => {
         
     } catch (error) {
         console.error('Error fetching reassignment candidates:', error);
-        res.status(500).json({
-            error: {
-                type: 'DATABASE_ERROR',
-                message: 'Failed to fetch reassignment candidates',
-                timestamp: new Date()
-            }
-        });
+        res.status(500).json({ /*... Database error ...*/ });
     }
 };
 
@@ -128,7 +151,7 @@ const getEscalatedQueue = async (req, res) => {
  */
 const adminResolveTicket = async (req, res) => {
     const { id: ticketId } = req.params;
-    const { resolution_message } = req.body;
+    const { resolution_message, status } = req.body;
     const { id: adminId, role, city, full_name: adminName } = req.user;
 
     try {
@@ -138,37 +161,27 @@ const adminResolveTicket = async (req, res) => {
             `SELECT id, city, escalation_level, assigned_agent_id, status FROM support_tickets WHERE id = $1 FOR UPDATE`,
             [ticketId]
         );
-
-        if (ticketResult.rows.length === 0) {
-            await query('ROLLBACK');
-            return res.status(404).json({ message: 'Ticket not found.' });
-        }
+        if (ticketResult.rows.length === 0) { throw new Error('Ticket not found'); }
         const ticket = ticketResult.rows[0];
 
-        // --- AUTHORIZATION FIX ---
-        // Check for null values before calling .toLowerCase()
+        // --- Authorization ---
         const ticketCity = ticket.city ? ticket.city.toLowerCase() : null;
         const adminCity = city ? city.toLowerCase() : null;
 
         if (role !== 'central_admin' && ticketCity !== adminCity) {
-             await query('ROLLBACK');
-             return res.status(403).json({ message: 'Access denied. Ticket is not in your city.' });
+             throw new Error('Access denied. Ticket is not in your city.');
         }
-        // --- END OF FIX ---
-
         if (ticket.escalation_level !== role) {
-             await query('ROLLBACK');
-             return res.status(403).json({ message: 'Access denied. Ticket is not escalated to your level.' });
+             throw new Error('Access denied. Ticket is not escalated to your level.');
         }
         if (ticket.status === 'resolved' || ticket.status === 'closed') {
-            await query('ROLLBACK');
-            return res.status(400).json({ message: 'Ticket is already resolved or closed.' });
+            throw new Error('Ticket is already resolved or closed.');
         }
 
         // 1. Update the ticket status
         await query(
-            `UPDATE support_tickets SET status = 'resolved', resolved_at = NOW() WHERE id = $1`,
-            [ticketId]
+            `UPDATE support_tickets SET status = $1, resolved_at = NOW() WHERE id = $2`,
+            [status, ticketId]
         );
 
         // 2. Add the admin's resolution note
@@ -178,36 +191,32 @@ const adminResolveTicket = async (req, res) => {
              VALUES ($1, $2, 'agent', $3, true)`,
             [ticketId, adminId, finalMessage]
         );
-
+        
+        // Note: We don't adjust agent count because escalation already did.
         await query('COMMIT');
-
-        res.status(200).json({ success: true, message: `Ticket successfully resolved.` });
+        res.status(200).json({ success: true, message: `Ticket successfully ${status}.` });
 
     } catch (error) {
-        try {
-            await query('ROLLBACK');
-        } catch (rollbackError) {
-            console.error('Failed to rollback transaction:', rollbackError);
-        }
+        try { await query('ROLLBACK'); } catch (rbErr) { console.error('Rollback failed:', rbErr); }
         console.error('Error in adminResolveTicket:', error);
         res.status(500).json({ message: error.message || 'Internal server error.' });
     }
 };
 
-
-// --- 3. REPLACED FUNCTION: Admin Re-assigns the Ticket ---
+/**
+ * Allows an admin to re-assign an escalated ticket to a support agent.
+ * If the agent is at capacity, the ticket will be queued for them.
+ */
 const reassignTicket = async (req, res) => {
     const { id: ticketId } = req.params;
-    const { agentId: targetAgentId, reason } = req.body; // The agent to assign to
+    const { agentId: targetAgentId, reason } = req.body; 
     const { id: adminId, role, city, full_name: adminName } = req.user;
-
-    const client = await dbService.connect();
     
     try {
-        await client.query('BEGIN');
+        await query('BEGIN'); // Start transaction
 
         // 1. Get and Lock the ticket
-        const ticketResult = await client.query(
+        const ticketResult = await query(
             `SELECT id, city, escalation_level, assigned_agent_id, status FROM support_tickets WHERE id = $1 FOR UPDATE`,
             [ticketId]
         );
@@ -215,77 +224,86 @@ const reassignTicket = async (req, res) => {
         const ticket = ticketResult.rows[0];
 
         // 2. Authorization
-        if (role !== 'central_admin' && LOWER(ticket.city) !== LOWER(city)) {
+        const ticketCity = ticket.city ? ticket.city.toLowerCase() : null;
+        const adminCity = city ? city.toLowerCase() : null;
+        if (role !== 'central_admin' && ticketCity !== adminCity) {
              throw new Error('Access denied. Ticket is not in your city.');
         }
         if (ticket.escalation_level !== role) {
              throw new Error('Access denied. Ticket is not escalated to your level.');
         }
-        if (ticket.status === 'resolved' || ticket.status === 'closed') {
-            throw new Error('Cannot re-assign a resolved or closed ticket.');
-        }
-        if (ticket.assigned_agent_id === targetAgentId) {
-            throw new Error('This ticket is already assigned to this agent.');
-        }
+        // ... (other authorization checks as needed) ...
 
         // 3. Get and Lock the TARGET agent's status
-        const capacityCheck = await client.query(
+        const capacityCheck = await query(
             'SELECT COALESCE(active_tickets_count, 0) as count FROM agent_status WHERE agent_id = $1 FOR UPDATE',
             [targetAgentId]
         );
         
         const currentCount = capacityCheck.rows[0]?.count || 0;
-        if (currentCount >= 2) { // Assuming maxTicketsPerAgent = 2
-            throw new Error('Target agent is at maximum ticket capacity.');
-        }
+        const maxCapacity = 2; // Your max capacity
+        const reassignMessage = `Ticket re-assigned by ${adminName} (${role}). Note: ${reason}`;
+        let responseMessage = '';
 
-        // 4. Update the ticket: set new agent, reset escalation, set status
-        await client.query(
-            `UPDATE support_tickets 
-             SET 
-                assigned_agent_id = $1, 
-                assigned_at = NOW(),
-                escalation_level = 'none', 
-                status = 'in_progress'
-             WHERE id = $2`,
-            [targetAgentId, ticketId]
-        );
+        // 4. Check Agent Capacity and Decide: Assign Now or Queue?
+        if (currentCount < maxCapacity) {
+            // --- SCENARIO A: AGENT IS AVAILABLE - ASSIGN NOW ---
+            console.log(`[adminReassign] Agent ${targetAgentId} has capacity. Assigning immediately.`);
+            await query(
+                `UPDATE support_tickets SET 
+                    assigned_agent_id = $1, assigned_at = NOW(),
+                    escalation_level = 'none', status = 'in_progress',
+                    queued_for_agent_id = NULL
+                 WHERE id = $2`,
+                [targetAgentId, ticketId]
+            );
+            
+            // Increment the NEW agent's count (UPSERT)
+            await query(
+                `INSERT INTO agent_status (agent_id, active_tickets_count) VALUES ($1, 1)
+                 ON CONFLICT (agent_id) DO UPDATE
+                 SET active_tickets_count = agent_status.active_tickets_count + 1`,
+                [targetAgentId]
+            );
+            
+            await query(
+                `INSERT INTO ticket_assignments (ticket_id, agent_id, assigned_by, assignment_type)
+                 VALUES ($1, $2, $3, 'manual')`,
+                [ticketId, targetAgentId, adminId]
+            );
+            responseMessage = 'Ticket successfully re-assigned to agent.';
+
+        } else {
+            // --- SCENARIO B: AGENT IS FULL - QUEUE THE TICKET ---
+            console.log(`[adminReassign] Agent ${targetAgentId} is at capacity. Queuing ticket.`);
+            await query(
+                `UPDATE support_tickets 
+                 SET 
+                    queued_for_agent_id = $1,
+                    escalation_level = 'none', 
+                    status = 'open',
+                    assigned_agent_id = NULL,
+                    assigned_at = NULL
+                 WHERE id = $2`,
+                [targetAgentId, ticketId]
+            );
+            responseMessage = 'Agent is at capacity. Ticket has been queued and will be assigned to them next.';
+        }
         
-        // 5. Increment the NEW agent's count (UPSERT logic)
-        await client.query(
-            `INSERT INTO agent_status (agent_id, active_tickets_count) VALUES ($1, 1)
-             ON CONFLICT (agent_id) DO UPDATE
-             SET active_tickets_count = agent_status.active_tickets_count + 1`,
-            [targetAgentId]
-        );
-        
-        // 6. Add admin's note to history
-        const reassignMessage = `Ticket re-assigned to agent by ${adminName} (${role}). Note: ${reason}`;
-        await client.query(
+        // 5. Add admin's note to history
+        await query(
             `INSERT INTO ticket_messages (ticket_id, sender_id, sender_type, message, is_internal)
              VALUES ($1, $2, 'agent', $3, true)`,
             [ticketId, adminId, reassignMessage]
         );
-        
-        // 7. Log the new assignment in history
-        await client.query(
-            `INSERT INTO ticket_assignments (ticket_id, agent_id, assigned_by, assignment_type)
-             VALUES ($1, $2, $3, 'manual')`,
-            [ticketId, targetAgentId, adminId]
-        );
 
-        await client.query('COMMIT');
-        
-        // 8. TODO: Notify the target agent via WebSocket
-        
-        res.status(200).json({ message: `Ticket successfully re-assigned.` });
+        await query('COMMIT');
+        res.status(200).json({ success: true, message: responseMessage });
 
     } catch (error) {
-        await client.query('ROLLBACK');
+        try { await query('ROLLBACK'); } catch (rbErr) { console.error('Rollback failed:', rbErr); }
         console.error('Error in reassignTicket:', error);
         res.status(500).json({ message: error.message || 'Internal server error.' });
-    } finally {
-        client.release();
     }
 };
 

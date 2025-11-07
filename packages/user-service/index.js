@@ -1,8 +1,7 @@
 // packages/user-service/index.js
-require('newrelic'); 
 const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, './.env') });
-
+require('newrelic');
 const express = require('express');
 const db = require('./db');
 const authRoutes = require('./routes/auth');
