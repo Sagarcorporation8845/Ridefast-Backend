@@ -9,7 +9,6 @@ const getReassignmentCandidates = async (req, res) => {
             return res.status(400).json({ error: { type: 'VALIDATION_ERROR', message: 'ticketId is required.' }});
         }
         
-        // --- THIS QUERY IS NOW ENHANCED ---
         let ticketQuery = `
             SELECT 
                 st.id, 
@@ -26,7 +25,6 @@ const getReassignmentCandidates = async (req, res) => {
             LEFT JOIN platform_staff ps_agent ON st.assigned_agent_id = ps_agent.id 
             WHERE st.id = $1
         `;
-        // --- END OF MODIFIED QUERY ---
         
         const ticketParams = [ticketId];
         
@@ -43,7 +41,6 @@ const getReassignmentCandidates = async (req, res) => {
         
         const ticket = ticketResult.rows[0];
 
-        // This 'agentsQuery' and the rest of the logic is correct
         const agentsQuery = `
             SELECT 
                 ps.id, ps.full_name, ps.email, ps.city,
@@ -87,7 +84,6 @@ const getReassignmentCandidates = async (req, res) => {
         res.json({
             success: true,
             data: {
-                // --- THE TICKET OBJECT NOW HAS ALL THE DATA ---
                 ticket: {
                     id: ticket.id,
                     city: ticket.city,
@@ -96,7 +92,6 @@ const getReassignmentCandidates = async (req, res) => {
                     status: ticket.status,
                     priority: ticket.priority,
                     customerName: ticket.customer_name,
-                    // --- NEW FIELD ADDED TO RESPONSE ---
                     escalatedByAgentName: ticket.escalated_by_agent_name 
                 },
                 availableAgents
