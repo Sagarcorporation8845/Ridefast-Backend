@@ -9,12 +9,24 @@ const getReassignmentCandidates = async (req, res) => {
             return res.status(400).json({ error: { type: 'VALIDATION_ERROR', message: 'ticketId is required.' }});
         }
         
-        // --- Get Ticket Details ---
+        // --- THIS QUERY IS NOW ENHANCED ---
         let ticketQuery = `
-            SELECT st.id, st.city, st.assigned_agent_id
+            SELECT 
+                st.id, 
+                st.city, 
+                st.assigned_agent_id,
+                st.subject,
+                st.status,
+                st.priority,
+                u.full_name as customer_name,
+                ps_agent.full_name as escalated_by_agent_name -- <-- NEW FIELD
             FROM support_tickets st
+            LEFT JOIN users u ON st.customer_id = u.id
+            -- New Join to get the name of the agent who escalated it
+            LEFT JOIN platform_staff ps_agent ON st.assigned_agent_id = ps_agent.id 
             WHERE st.id = $1
         `;
+        // --- END OF MODIFIED QUERY ---
         
         const ticketParams = [ticketId];
         
@@ -31,48 +43,33 @@ const getReassignmentCandidates = async (req, res) => {
         
         const ticket = ticketResult.rows[0];
 
-        // --- THIS QUERY IS NOW ENHANCED ---
+        // This 'agentsQuery' and the rest of the logic is correct
         const agentsQuery = `
             SELECT 
-                ps.id, 
-                ps.full_name, 
-                ps.email, 
-                ps.city,
+                ps.id, ps.full_name, ps.email, ps.city,
                 COALESCE(ast.status, 'offline') as online_status, 
                 COALESCE(ast.active_tickets_count, 0) as active_tickets_count,
                 (COALESCE(ast.active_tickets_count, 0) < 2) as can_assign_immediately,
-                
-                -- This new subquery counts queued tickets for each agent
                 COALESCE(q_counts.queued_count, 0) as queued_tickets_count
-
             FROM platform_staff ps
-            
             LEFT JOIN agent_status ast ON ps.id = ast.agent_id
-            
-            -- New join to a subquery that counts queued tickets
             LEFT JOIN (
-                SELECT
-                    queued_for_agent_id,
-                    COUNT(id) as queued_count
+                SELECT queued_for_agent_id, COUNT(id) as queued_count
                 FROM support_tickets
-                WHERE
-                    status = 'open' AND queued_for_agent_id IS NOT NULL
+                WHERE status = 'open' AND queued_for_agent_id IS NOT NULL
                 GROUP BY queued_for_agent_id
             ) q_counts ON ps.id = q_counts.queued_for_agent_id
-
             WHERE 
                 ps.role = 'support'
                 AND ps.status = 'active'
                 AND LOWER(TRIM(ps.city)) = LOWER(TRIM($1))
                 AND ps.id != COALESCE($2, '00000000-0000-0000-0000-000000000000'::uuid) 
-            
             ORDER BY
                 CASE WHEN COALESCE(ast.status, 'offline') = 'online' THEN 1 ELSE 2 END ASC,
                 active_tickets_count ASC, 
-                queued_tickets_count ASC, -- Also sort by who has the smallest queue
+                queued_tickets_count ASC,
                 ps.full_name ASC
         `;
-        // --- END OF MODIFIED QUERY ---
         
         const agentsResult = await query(agentsQuery, [ticket.city, ticket.assigned_agent_id]);
         
@@ -84,17 +81,23 @@ const getReassignmentCandidates = async (req, res) => {
             onlineStatus: row.online_status,
             activeTicketsCount: parseInt(row.active_tickets_count, 10),
             canAssignImmediately: row.can_assign_immediately,
-            // --- NEW FIELD ADDED TO RESPONSE ---
             queuedTicketsCount: parseInt(row.queued_tickets_count, 10) 
         }));
         
         res.json({
             success: true,
             data: {
+                // --- THE TICKET OBJECT NOW HAS ALL THE DATA ---
                 ticket: {
                     id: ticket.id,
                     city: ticket.city,
-                    currentAgentId: ticket.assigned_agent_id
+                    currentAgentId: ticket.assigned_agent_id,
+                    subject: ticket.subject,
+                    status: ticket.status,
+                    priority: ticket.priority,
+                    customerName: ticket.customer_name,
+                    // --- NEW FIELD ADDED TO RESPONSE ---
+                    escalatedByAgentName: ticket.escalated_by_agent_name 
                 },
                 availableAgents
             }
