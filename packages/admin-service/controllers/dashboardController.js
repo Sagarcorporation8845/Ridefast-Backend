@@ -118,8 +118,58 @@ const getOverviewStats = async (req, res) => {
 
 // 2. Ride Volume Graph
 const getRideVolume = async (req, res) => {
+    const { city, useMockData } = req.query; // Optional city filter
+    // --- START MOCK DATA BLOCK ---
+    // If the 'useMockData' flag is set to 'true', generate and return fake data.
+    if (useMockData === 'true') {
+        console.log('[Dashboard] Returning MOCK data for ride volume graph.');
+        
+        const mockSummary = {
+            totalStarted: 16921,
+            totalCompleted: 15680,
+            totalCancelled: 1241,
+            overallAverageFare: 158.40
+        };
+
+        const mockHourlyData = [];
+        const now = new Date();
+        now.setMinutes(0, 0, 0); // Start at the current hour
+
+        // A realistic 24-hour pattern: low at night, morning peak, evening peak
+        const ridePatterns = [
+            800, 900, 1900, 1800, 1000, 1800, 3000, 4000, 3500, 4000, // Night/Early morning
+            4500, 8000, 5000, 5100, 6000, 2800, 6200, 7000, 900, 850, // Morning/Day
+            900, 950, 700, 300 // Evening
+        ];
+        
+        // Generate 24 hourly data points, counting backwards
+        for (let i = 23; i >= 0; i--) {
+            const hourTimestamp = new Date(now.getTime() - i * 60 * 60 * 1000);
+            
+            const started = Math.floor(ridePatterns[i] * (Math.random() * 0.2 + 0.9)); // Add +/- 10% jitter
+            const completed = Math.floor(started * 0.9); // 90% completed
+            const cancelled = started - completed;
+            const avgFare = Math.floor(Math.random() * 50 + 130); // Random fare between 130-180
+            
+            mockHourlyData.push({
+                hour: hourTimestamp.toISOString(),
+                started_count: started,
+                completed_count: completed,
+                cancelled_count: cancelled,
+                average_fare: avgFare
+            });
+        }
+
+        return res.json({ 
+            success: true, 
+            data: {
+                hourlyData: mockHourlyData,
+                summary: mockSummary
+            } 
+        });
+    }
+    // --- END MOCK DATA BLOCK ---
     try {
-        const { city } = req.query; // Optional city filter
         
         // Build base WHERE clause and params for filtering
         let baseWhereConditions = [`r.created_at >= NOW() - INTERVAL '24 hours'`];
