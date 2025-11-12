@@ -196,15 +196,47 @@ const requestRide = async (req, res) => {
             console.error('[RideRequest] Could not fetch addresses directly from Google:', geoError.message);
         }
 
+        // --- 1. MODIFICATION: FETCH CURRENT RATES FOR SNAPSHOT ---
+        // Get the current fare rates from the database to "freeze" them for this ride.
+        const ratesResult = await client.query(
+            `SELECT base_fare, per_km_rate, per_min_rate 
+             FROM vehicle_rates
+             WHERE vehicle_category = $1 
+               AND COALESCE(sub_category, '') = COALESCE($2, '') 
+               AND LOWER(city_name) = LOWER($3)
+               AND is_active = true`,
+            [decodedFare.vehicle, decodedFare.sub_category, decodedFare.city]
+        );
+
+        const fareSnapshot = ratesResult.rows[0];
+        if (!fareSnapshot) {
+            // This is a critical error: the fare was calculated with rates that no longer exist.
+            await client.query('ROLLBACK');
+            return res.status(409).json({ message: 'Fare rates have changed. Please get a new quote.' });
+        }
+        // --- END MODIFICATION 1 ---
+
         const otp = Math.floor(1000 + Math.random() * 9000).toString();
 
         const { pickup, dropoff } = decodedFare;
-        const rideResult = await client.query(
-            `INSERT INTO rides (customer_id, pickup_address, destination_address, pickup_latitude, pickup_longitude, destination_latitude, destination_longitude, status, fare, payment_method, wallet_deduction, amount_due, otp)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, 'requested', $8, $9, $10, $11, $12)
-             RETURNING id`,
-            [userId, pickupAddress, destinationAddress, pickup.lat, pickup.lng, dropoff.lat, dropoff.lng, totalFare, payment_method, walletDeduction, amountDue, otp]
-        );
+       // --- 2. MODIFICATION: ADD fare_snapshot TO THE INSERT QUERY ---
+        const rideResult = await client.query(
+            `INSERT INTO rides (
+                customer_id, pickup_address, destination_address, 
+                pickup_latitude, pickup_longitude, destination_latitude, destination_longitude, 
+                status, fare, payment_method, wallet_deduction, amount_due, otp, 
+                fare_snapshot 
+             )
+             VALUES ($1, $2, $3, $4, $5, $6, $7, 'requested', $8, $9, $10, $11, $12, $13)
+             RETURNING id`,
+            [
+                userId, pickupAddress, destinationAddress, 
+                pickup.lat, pickup.lng, dropoff.lat, dropoff.lng, 
+                totalFare, payment_method, walletDeduction, amountDue, otp,
+                JSON.stringify(fareSnapshot) // Add the snapshot here
+            ]
+        );
+        // --- END MODIFICATION 2 ---
 
         const rideId = rideResult.rows[0].id;
         

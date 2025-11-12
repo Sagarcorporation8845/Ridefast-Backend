@@ -5,6 +5,37 @@ const { connectionManager } = require('../services/rideManager');
 const { getHaversineDistance } = require('../utils/geo');
 const axios = require('axios'); // Import axios
 
+/**
+ * Helper function to check a driver's subscription status.
+ * @param {string} driverId - The UUID of the driver to check.
+ * @returns {Promise<boolean>} - True if the subscription is active, false otherwise.
+ */
+async function checkDriverSubscription(driverId) {
+    try {
+        // This query asks the database: "Does this driver have a row where
+        // is_active is true AND the active_until time is still in the future?"
+        const subResult = await db.query(
+            `SELECT driver_id FROM driver_subscriptions 
+             WHERE driver_id = $1 
+               AND is_active = true 
+               AND active_until > NOW()`, // <-- The database handles the time check
+            [driverId]
+        );
+
+        // If we get 1 row back, their subscription is valid.
+        // If we get 0 rows, it's not (either expired, inactive, or non-existent).
+        if (subResult.rows.length > 0) {
+            return true; // Subscription is valid
+        } else {
+            return false; // Subscription is expired or invalid
+        }
+        
+    } catch (error) {
+        console.error(`Error checking subscription for driver ${driverId}:`, error);
+        return false; // Fail-safe: assume not subscribed if an error occurs
+    }
+}
+
 const handleStatusChange = async (ws, message) => {
   const { status } = message.payload;
   const { driverId, city } = ws.driverInfo;
@@ -13,6 +44,24 @@ const handleStatusChange = async (ws, message) => {
   if (!validStatuses.includes(status)) {
     return ws.send(JSON.stringify({ type: 'error', message: 'Invalid status provided.' }));
   }
+
+  // --- NEW SUBSCRIPTION CHECK ---
+  if (status === 'online') {
+      const isSubscribed = await checkDriverSubscription(driverId);
+      if (!isSubscribed) {
+          console.log(`[DriverService] Driver ${driverId} failed subscription check. Cannot go online.`);
+          // Send a specific error type to the app
+          ws.send(JSON.stringify({ 
+              type: 'ERROR', // Use a clear error type
+              payload: {
+                  message: 'Your daily subscription has expired. Please pay to go online.',
+                  code: 'SUBSCRIPTION_EXPIRED' // This helps your app show the payment screen
+              }
+          }));
+          return; // Stop them from going online
+      }
+  }
+  // --- END OF NEW CHECK ---
 
   const client = await db.getClient(); 
 
@@ -107,6 +156,21 @@ const handleLocationUpdate = async (ws, message) => {
 const handleAcceptRide = async (ws, message) => {
     const { rideId, polyline: mainTripPolyline } = message.payload;
     const { driverId, city } = ws.driverInfo;
+
+    // --- NEW SUBSCRIPTION CHECK (SAFETY NET) ---
+    const isSubscribed = await checkDriverSubscription(driverId);
+    if (!isSubscribed) {
+        console.log(`[DriverService] Driver ${driverId} failed subscription check before accepting ride.`);
+        ws.send(JSON.stringify({ 
+            type: 'ERROR', 
+            payload: {
+                message: 'Your subscription has expired. Please pay before accepting a new ride.',
+                code: 'SUBSCRIPTION_EXPIRED'
+            }
+        }));
+        return null; // Stop them from accepting the ride
+    }
+    // --- END OF NEW CHECK ---
 
     try {
         const result = await redisClient.set(`ride_request:${rideId}`, `accepted_by:${driverId}`, { XX: true, GET: true });
@@ -331,6 +395,7 @@ const handleEndRide = async (ws, message) => {
 };
 
 module.exports = {
+  checkDriverSubscription,
   handleStatusChange,
   handleLocationUpdate,
   handleAcceptRide,

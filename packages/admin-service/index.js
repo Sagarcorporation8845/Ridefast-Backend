@@ -2,8 +2,16 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
-const path = require('path'); // Import the path module
-require('dotenv').config({ path: path.resolve(__dirname, './.env') }); // FIX: Provide a specific path
+const path = require('path');
+require('dotenv').config({ path: path.resolve(__dirname, './.env') }); 
+
+// --- 1. IMPORT YOUR DB CONNECTION & SCHEDULER ---
+const { connectDb } = require('./db'); // Import the connectDb function
+const { startScheduler } = require('./services/scheduler');
+// ---
+
+const configRoutes = require('./routes/config');
+const dashboardRoutes = require('./routes/dashboard');
 
 const app = express();
 const PORT = process.env.PORT || 3004;
@@ -43,13 +51,12 @@ app.get('/health', (req, res) => {
     });
 });
 
-const dashboardRoutes = require('./routes/dashboard');
-
 // Routes
 app.use('/admin/agents', require('./routes/agents'));
 app.use('/admin/tickets', require('./routes/tickets'));
 app.use('/admin/cities', require('./routes/cities')); 
 app.use('/admin/dashboard', dashboardRoutes);
+app.use('/admin/config', configRoutes); 
 
 // 404 handler
 app.use('*', (req, res) => {
@@ -86,7 +93,28 @@ process.on('SIGINT', () => {
     process.exit(0);
 });
 
-app.listen(PORT, () => {
-    console.log(`[admin-service] Admin Service started on port ${PORT}`);
-    console.log(`[admin-service] Environment: ${process.env.NODE_ENV || 'development'}`);
-});
+// --- 2. CREATE A START SERVER FUNCTION ---
+// We wrap app.listen in a function that connects to the DB first
+const startServer = async () => {
+    try {
+        // First, connect to the database
+        await connectDb();
+        console.log('[admin-service] Database connected successfully.');
+        
+        // Second, start the scheduler (which needs the DB)
+        startScheduler(); 
+        
+        // Finally, start the web server
+        app.listen(PORT, () => {
+            console.log(`[admin-service] Admin Service started on port ${PORT}`);
+            console.log(`[admin-service] Environment: ${process.env.NODE_ENV || 'development'}`);
+        });
+
+    } catch (err) {
+        console.error('❌ FATAL: [admin-service] Failed to start server.', err);
+        process.exit(1);
+    }
+};
+
+// --- 3. CALL THE FUNCTION TO START EVERYTHING ---
+startServer();
