@@ -5,13 +5,12 @@ const rateLimit = require('express-rate-limit');
 const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, './.env') }); 
 
-// --- 1. IMPORT YOUR DB CONNECTION & SCHEDULER ---
-const { connectDb } = require('./db'); // Import the connectDb function
+const { connectDb } = require('./db'); 
 const { startScheduler } = require('./services/scheduler');
-// ---
 
 const configRoutes = require('./routes/config');
 const dashboardRoutes = require('./routes/dashboard');
+const reportsRoutes = require('./routes/reports');
 
 const app = express();
 const PORT = process.env.PORT || 3004;
@@ -57,6 +56,7 @@ app.use('/admin/tickets', require('./routes/tickets'));
 app.use('/admin/cities', require('./routes/cities')); 
 app.use('/admin/dashboard', dashboardRoutes);
 app.use('/admin/config', configRoutes); 
+app.use('/admin/reports', reportsRoutes);
 
 // 404 handler
 app.use('*', (req, res) => {
